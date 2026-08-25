@@ -1,6 +1,7 @@
 /**
  * GitProof - Frontend Logic & GenLayer Consensus Simulator
- * Enhanced with Motion / Framer Motion Animations & Tailwind UI
+ * Enhanced with Motion / Framer Motion Animations, Tailwind UI,
+ * and Full GitHub Profile Viewer for searched accounts.
  */
 
 // Simulated on-chain state storage (mirrors GenLayer Intelligent Contract storage)
@@ -22,8 +23,19 @@ const demoProfileData = {
     avatar: "https://avatars.githubusercontent.com/u/1024025?v=4",
     annualContribs: 3420,
     publicRepos: 7,
-    bio: "Creator of Linux and Git",
-    verifiedRepos: ["torvalds/linux", "git/git"]
+    followers: 245000,
+    following: 0,
+    company: "Linux Foundation",
+    location: "Portland, OR",
+    blog: "https://kernel.org",
+    bio: "Creator of Linux and Git. Open source architect.",
+    verifiedRepos: ["torvalds/linux", "git/git"],
+    repos: [
+      { name: "linux", description: "Linux kernel source tree", language: "C", stars: 178000, forks: 54000, url: "https://github.com/torvalds/linux" },
+      { name: "git", description: "Fast, scalable, distributed revision control system", language: "C", stars: 52000, forks: 26000, url: "https://github.com/git/git" },
+      { name: "subsurface-for-dirk", description: "Subsurface dive log program", language: "C", stars: 1200, forks: 450, url: "https://github.com/torvalds/subsurface-for-dirk" },
+      { name: "uemacs", description: "MicroEMACS editor for Linux", language: "C", stars: 950, forks: 310, url: "https://github.com/torvalds/uemacs" }
+    ]
   },
   "vbuterin": {
     name: "Vitalik Buterin",
@@ -31,8 +43,19 @@ const demoProfileData = {
     avatar: "https://avatars.githubusercontent.com/u/2230894?v=4",
     annualContribs: 840,
     publicRepos: 18,
-    bio: "Ethereum research & open source contributor",
-    verifiedRepos: ["ethereum/go-ethereum", "ethereum/consensus-specs", "ethereum/EIPs"]
+    followers: 125000,
+    following: 2,
+    company: "Ethereum Foundation",
+    location: "Global / Decentralized",
+    blog: "https://vitalik.eth.limo",
+    bio: "Ethereum research & open source protocol contributor.",
+    verifiedRepos: ["ethereum/go-ethereum", "ethereum/consensus-specs", "ethereum/EIPs"],
+    repos: [
+      { name: "go-ethereum", description: "Official Go implementation of the Ethereum protocol", language: "Go", stars: 47000, forks: 20000, url: "https://github.com/ethereum/go-ethereum" },
+      { name: "consensus-specs", description: "Ethereum Proof-of-Stake consensus specifications", language: "Python", stars: 4500, forks: 1600, url: "https://github.com/ethereum/consensus-specs" },
+      { name: "EIPs", description: "The Ethereum Improvement Proposal repository", language: "Markdown", stars: 13500, forks: 5200, url: "https://github.com/ethereum/EIPs" },
+      { name: "py-evm", description: "A Python implementation of the Ethereum Virtual Machine", language: "Python", stars: 2200, forks: 780, url: "https://github.com/ethereum/py-evm" }
+    ]
   },
   "karalabe": {
     name: "Péter Szilágyi",
@@ -40,10 +63,22 @@ const demoProfileData = {
     avatar: "https://avatars.githubusercontent.com/u/129561?v=4",
     annualContribs: 1250,
     publicRepos: 32,
-    bio: "Go Ethereum (geth) team lead",
-    verifiedRepos: ["ethereum/go-ethereum"]
+    followers: 16000,
+    following: 15,
+    company: "Ethereum Foundation",
+    location: "Budapest, Hungary",
+    blog: "https://karalabe.com",
+    bio: "Go Ethereum (geth) team lead and core systems builder.",
+    verifiedRepos: ["ethereum/go-ethereum"],
+    repos: [
+      { name: "go-ethereum", description: "Official Go implementation of the Ethereum protocol", language: "Go", stars: 47000, forks: 20000, url: "https://github.com/ethereum/go-ethereum" },
+      { name: "hid", description: "Hardware input device library for Go", language: "Go", stars: 650, forks: 180, url: "https://github.com/karalabe/hid" },
+      { name: "usb", description: "libusb wrapper for Go", language: "Go", stars: 420, forks: 110, url: "https://github.com/karalabe/usb" }
+    ]
   }
 };
+
+let currentPassportUsername = "torvalds";
 
 document.addEventListener("DOMContentLoaded", () => {
   setupLandingAndAppLauncher();
@@ -56,6 +91,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupCopyProof();
   setupGitHubAuth();
   setupWalletConnect();
+  setupProfileModalEvents();
   
   // Render initial passport
   updatePassportUI("torvalds", {
@@ -65,7 +101,7 @@ document.addEventListener("DOMContentLoaded", () => {
     badges: ["500+ Annual Contributor", "Core Kernel Contributor", "Web3 Verified"]
   });
 
-  // Trigger Framer Motion / Motion animation for Landing Page
+  // Trigger Framer Motion animation for Landing Page
   triggerLandingAnimations();
 });
 
@@ -193,7 +229,7 @@ function setLoadingStep(stepNum, status) {
  * ========================================================================= */
 function triggerLandingAnimations() {
   if (window.Motion && window.Motion.animate) {
-    const { animate, stagger } = window.Motion;
+    const { animate } = window.Motion;
     animate("#view-landing h1", { opacity: [0, 1], y: [20, 0] }, { duration: 0.6, easing: "ease-out" });
     animate("#view-landing p", { opacity: [0, 1], y: [15, 0] }, { delay: 0.15, duration: 0.5, easing: "ease-out" });
     animate("#view-landing .btn-launch-app", { opacity: [0, 1], scale: [0.96, 1] }, { delay: 0.25, duration: 0.4 });
@@ -410,32 +446,68 @@ async function triggerVerification() {
 }
 
 /* =========================================================================
- * GITHUB DATA EXTRACTION & AI EVALUATION LOGIC
+ * GITHUB DATA EXTRACTION & REPOSITORY FETCHER
  * ========================================================================= */
 async function fetchGitHubProfileData(username) {
-  if (demoProfileData[username.toLowerCase()]) {
-    const demo = demoProfileData[username.toLowerCase()];
+  const cleanUser = username.trim().toLowerCase();
+  
+  if (demoProfileData[cleanUser]) {
+    const demo = demoProfileData[cleanUser];
     return {
       name: demo.name,
+      login: demo.username,
       avatar_url: demo.avatar,
       annualContribs: demo.annualContribs,
       public_repos: demo.publicRepos,
+      followers: demo.followers,
+      following: demo.following,
       bio: demo.bio,
-      verifiedRepos: demo.verifiedRepos
+      company: demo.company,
+      location: demo.location,
+      blog: demo.blog,
+      verifiedRepos: demo.verifiedRepos,
+      repos: demo.repos
     };
   }
 
   try {
-    const res = await fetch(`https://api.github.com/users/${username}`);
-    if (res.ok) {
-      const data = await res.json();
+    const userRes = await fetch(`https://api.github.com/users/${username}`);
+    if (userRes.ok) {
+      const data = await userRes.json();
+      
+      // Fetch public repos
+      let userRepos = [];
+      try {
+        const reposRes = await fetch(`https://api.github.com/users/${username}/repos?sort=updated&per_page=6`);
+        if (reposRes.ok) {
+          const rawRepos = await reposRes.json();
+          userRepos = rawRepos.map(r => ({
+            name: r.name,
+            description: r.description || "Public repository on GitHub",
+            language: r.language || "Code",
+            stars: r.stargazers_count || 0,
+            forks: r.forks_count || 0,
+            url: r.html_url
+          }));
+        }
+      } catch (repoErr) {
+        console.warn("Repos fetch fallback:", repoErr);
+      }
+
       return {
         name: data.name || username,
+        login: data.login || username,
         avatar_url: data.avatar_url,
         annualContribs: (data.public_repos * 18) + (data.followers * 5) + 42,
-        public_repos: data.public_repos,
-        bio: data.bio || "Open Source Developer",
-        verifiedRepos: []
+        public_repos: data.public_repos || 0,
+        followers: data.followers || 0,
+        following: data.following || 0,
+        bio: data.bio || "Open Source Developer on GitHub",
+        company: data.company || "Independent",
+        location: data.location || "Earth",
+        blog: data.blog || `https://github.com/${username}`,
+        verifiedRepos: userRepos.map(r => `${username}/${r.name}`),
+        repos: userRepos
       };
     }
   } catch (e) {
@@ -444,11 +516,21 @@ async function fetchGitHubProfileData(username) {
 
   return {
     name: username,
+    login: username,
     avatar_url: `https://avatars.githubusercontent.com/u/${Math.floor(Math.random() * 5000000)}?v=4`,
-    annualContribs: Math.floor(Math.random() * 600),
-    public_repos: 12,
+    annualContribs: Math.floor(Math.random() * 600) + 120,
+    public_repos: 8,
+    followers: 35,
+    following: 20,
     bio: "Developer on GitHub",
-    verifiedRepos: []
+    company: "Open Source",
+    location: "Decentralized",
+    blog: `https://github.com/${username}`,
+    verifiedRepos: [],
+    repos: [
+      { name: "core-contracts", description: "Smart contracts and decentralized verification", language: "Solidity", stars: 14, forks: 3, url: `https://github.com/${username}` },
+      { name: "web3-tools", description: "Developer utilities and SDKs", language: "TypeScript", stars: 28, forks: 6, url: `https://github.com/${username}` }
+    ]
   };
 }
 
@@ -569,6 +651,7 @@ function renderResultCard(res, txHash) {
 }
 
 function updatePassportUI(username, data) {
+  currentPassportUsername = username;
   document.getElementById("passport-username").textContent = username;
   document.getElementById("passport-id").textContent = `ID: GP-${username.toUpperCase()}-GENLAYER`;
   document.getElementById("passport-trust-score").textContent = `${data.trustScore}%`;
@@ -592,6 +675,163 @@ function updatePassportUI(username, data) {
     window.Motion.animate("#passport-avatar", { scale: [0.9, 1] }, { duration: 0.3 });
   }
 }
+
+/* =========================================================================
+ * GITHUB PROFILE MODAL VIEWER
+ * ========================================================================= */
+function setupProfileModalEvents() {
+  const modal = document.getElementById("github-profile-modal");
+  const closeBtn = document.getElementById("profile-modal-close-btn");
+  const passportViewBtn = document.getElementById("btn-passport-view-github");
+  const passportAvatar = document.getElementById("passport-avatar");
+  const passportUsername = document.getElementById("passport-username");
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
+      modal.classList.add("hidden");
+    });
+  }
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) modal.classList.add("hidden");
+  });
+
+  // Open modal from passport card
+  if (passportViewBtn) {
+    passportViewBtn.addEventListener("click", () => {
+      openGitHubProfileModal(currentPassportUsername);
+    });
+  }
+  if (passportAvatar) {
+    passportAvatar.addEventListener("click", () => {
+      openGitHubProfileModal(currentPassportUsername);
+    });
+  }
+  if (passportUsername) {
+    passportUsername.addEventListener("click", () => {
+      openGitHubProfileModal(currentPassportUsername);
+    });
+  }
+}
+
+async function openGitHubProfileModal(username) {
+  const modal = document.getElementById("github-profile-modal");
+  const container = document.getElementById("profile-modal-content");
+  
+  modal.classList.remove("hidden");
+  
+  // Show loading skeleton
+  container.innerHTML = `
+    <div class="py-12 text-center font-mono">
+      <i class="fa-solid fa-circle-notch fa-spin text-3xl text-black mb-3"></i>
+      <p class="text-xs uppercase tracking-wider text-neutral-600 font-bold">Fetching Live GitHub Profile for @${username}...</p>
+    </div>
+  `;
+
+  if (window.Motion && window.Motion.animate) {
+    window.Motion.animate(modal.firstElementChild, { opacity: [0, 1], scale: [0.96, 1] }, { duration: 0.25 });
+  }
+
+  const profile = await fetchGitHubProfileData(username);
+  const githubUrl = `https://github.com/${profile.login || username}`;
+
+  container.innerHTML = `
+    <!-- Header with Avatar & Details -->
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b-2 border-black pb-6 mb-6">
+      <div class="flex items-center gap-4">
+        <img src="${profile.avatar_url}" class="w-16 h-16 sm:w-20 sm:h-20 border-2 border-black object-cover shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]" alt="Avatar">
+        <div>
+          <h2 class="font-display font-black text-2xl text-black uppercase tracking-tight">${profile.name}</h2>
+          <div class="flex items-center gap-2 font-mono text-xs text-neutral-600">
+            <span class="font-bold text-black">@${profile.login || username}</span>
+            <span>•</span>
+            <span>${profile.company || "Independent"}</span>
+          </div>
+          <p class="font-sans text-xs text-neutral-700 mt-1 max-w-md">${profile.bio || "Open Source Contributor"}</p>
+        </div>
+      </div>
+      
+      <!-- Direct Link to GitHub.com -->
+      <a href="${githubUrl}" target="_blank" rel="noopener noreferrer" class="px-4 py-2.5 bg-black text-white font-mono text-xs font-bold uppercase tracking-wider hover:bg-neutral-800 transition-all flex items-center gap-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none flex-shrink-0">
+        <span>View on GitHub</span>
+        <i class="fa-solid fa-arrow-up-right-from-square text-[11px]"></i>
+      </a>
+    </div>
+
+    <!-- Live Statistics Bar -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-neutral-100 border-2 border-black p-4 text-center font-mono mb-6">
+      <div>
+        <div class="font-display font-black text-xl text-black">${(profile.annualContribs || 0).toLocaleString()}</div>
+        <div class="text-[10px] text-neutral-500 uppercase font-bold tracking-wider">Annual Contribs</div>
+      </div>
+      <div>
+        <div class="font-display font-black text-xl text-black">${profile.public_repos || 0}</div>
+        <div class="text-[10px] text-neutral-500 uppercase font-bold tracking-wider">Public Repos</div>
+      </div>
+      <div>
+        <div class="font-display font-black text-xl text-black">${(profile.followers || 0).toLocaleString()}</div>
+        <div class="text-[10px] text-neutral-500 uppercase font-bold tracking-wider">Followers</div>
+      </div>
+      <div>
+        <div class="font-display font-black text-xl text-black">${profile.following || 0}</div>
+        <div class="text-[10px] text-neutral-500 uppercase font-bold tracking-wider">Following</div>
+      </div>
+    </div>
+
+    <!-- Metadata Tags -->
+    <div class="flex flex-wrap items-center gap-3 font-mono text-xs text-neutral-600 mb-6">
+      ${profile.location ? `<span class="flex items-center gap-1"><i class="fa-solid fa-location-dot text-black"></i> ${profile.location}</span>` : ''}
+      ${profile.blog ? `<a href="${profile.blog.startsWith('http') ? profile.blog : 'https://' + profile.blog}" target="_blank" class="flex items-center gap-1 hover:text-black underline"><i class="fa-solid fa-link text-black"></i> ${profile.blog.replace(/^https?:\/\//, '')}</a>` : ''}
+    </div>
+
+    <!-- Public Repositories Section -->
+    <div class="mb-6">
+      <div class="flex items-center justify-between mb-3 border-b border-black pb-2">
+        <h4 class="font-mono text-xs font-bold uppercase tracking-wider text-black flex items-center gap-2">
+          <i class="fa-solid fa-book-bookmark"></i> Top / Recent Repositories
+        </h4>
+        <span class="font-mono text-[11px] text-neutral-500">${profile.repos ? profile.repos.length : 0} Shown</span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        ${(profile.repos || []).map(repo => `
+          <div class="border border-black p-3.5 bg-neutral-50 flex flex-col justify-between hover:bg-white transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <a href="${repo.url}" target="_blank" rel="noopener noreferrer" class="font-mono text-xs font-bold text-black hover:underline flex items-center gap-1 truncate">
+                  <i class="fa-solid fa-code-branch text-[10px]"></i> ${repo.name}
+                </a>
+                <span class="font-mono text-[10px] px-1.5 py-0.5 bg-neutral-200 border border-neutral-400 font-semibold">${repo.language}</span>
+              </div>
+              <p class="text-[11px] text-neutral-600 font-sans line-clamp-2 mb-2">${repo.description}</p>
+            </div>
+            <div class="flex items-center gap-4 font-mono text-[10px] text-neutral-500 pt-2 border-t border-neutral-200">
+              <span><i class="fa-solid fa-star text-black mr-0.5"></i> ${repo.stars.toLocaleString()}</span>
+              <span><i class="fa-solid fa-code-fork text-black mr-0.5"></i> ${repo.forks.toLocaleString()}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <!-- Quick Action: Inscribe & Verify in GenLayer -->
+    <div class="pt-4 border-t-2 border-black flex flex-col sm:flex-row items-center justify-between gap-3">
+      <span class="font-mono text-xs text-neutral-500">Ready to verify on-chain?</span>
+      <button onclick="verifyProfileFromModal('${profile.login || username}')" class="w-full sm:w-auto px-6 py-3 bg-black text-white font-display font-black text-xs uppercase tracking-widest hover:bg-neutral-800 transition-all flex items-center justify-center gap-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">
+        <i class="fa-solid fa-bolt"></i> Verify Claims on GenLayer
+      </button>
+    </div>
+  `;
+}
+
+window.verifyProfileFromModal = (user) => {
+  document.getElementById("github-profile-modal").classList.add("hidden");
+  document.getElementById("nav-btn-verify").click();
+  document.getElementById("input-username").value = user;
+  triggerVerification();
+};
+
+window.openGitHubProfileModal = openGitHubProfileModal;
 
 /* =========================================================================
  * BOUNTY BOARD INTERACTION
@@ -633,36 +873,55 @@ function setupPassportSearch() {
     if (!query) return;
 
     btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
-    await sleep(600);
+    await sleep(500);
 
     const profile = await fetchGitHubProfileData(query);
     btn.innerHTML = `<i class="fa-solid fa-magnifying-glass"></i> LOOKUP`;
 
+    const githubUrl = `https://github.com/${profile.login || query}`;
+
     resultContainer.innerHTML = `
       <div class="border-2 border-black bg-white p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] mt-4">
-        <div class="flex items-center gap-4 border-b-2 border-black pb-4 mb-4">
-          <img src="${profile.avatar_url}" class="w-14 h-14 border-2 border-black object-cover" alt="avatar">
-          <div>
-            <h3 class="font-display font-black text-lg text-black uppercase">${profile.name} (@${query})</h3>
-            <p class="font-mono text-xs text-neutral-500">${profile.bio}</p>
+        
+        <!-- Header with Avatar and Actions -->
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b-2 border-black pb-4 mb-4">
+          <div class="flex items-center gap-4 cursor-pointer" onclick="openGitHubProfileModal('${query}')" title="Click to view full GitHub profile">
+            <img src="${profile.avatar_url}" class="w-14 h-14 border-2 border-black object-cover shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" alt="avatar">
+            <div>
+              <h3 class="font-display font-black text-lg text-black uppercase hover:underline">${profile.name} (@${query})</h3>
+              <p class="font-mono text-xs text-neutral-500">${profile.bio}</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button onclick="openGitHubProfileModal('${query}')" class="px-3 py-1.5 bg-white text-black border-2 border-black font-mono text-xs font-bold uppercase hover:bg-neutral-100 transition-all flex items-center gap-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+              <i class="fa-brands fa-github"></i> View Profile
+            </button>
+            <a href="${githubUrl}" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 bg-black text-white font-mono text-xs font-bold uppercase hover:bg-neutral-800 transition-all flex items-center gap-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+              <span>GitHub ↗</span>
+            </a>
           </div>
         </div>
-        <div class="grid grid-cols-3 gap-2 bg-neutral-100 p-3 border border-black text-center mb-4">
+
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-3 gap-2 bg-neutral-100 p-3 border border-black text-center mb-4 font-mono">
           <div>
             <div class="font-display font-black text-lg text-black">${(profile.annualContribs || 0).toLocaleString()}</div>
-            <div class="font-mono text-[9px] uppercase tracking-wider text-neutral-500 font-bold">Annual Contribs</div>
+            <div class="text-[9px] uppercase tracking-wider text-neutral-500 font-bold">Annual Contribs</div>
           </div>
           <div>
             <div class="font-display font-black text-lg text-black">${profile.public_repos}</div>
-            <div class="font-mono text-[9px] uppercase tracking-wider text-neutral-500 font-bold">Public Repos</div>
+            <div class="text-[9px] uppercase tracking-wider text-neutral-500 font-bold">Public Repos</div>
           </div>
           <div>
             <div class="font-display font-black text-lg text-black">Active</div>
-            <div class="font-mono text-[9px] uppercase tracking-wider text-neutral-500 font-bold">Oracle Quorum</div>
+            <div class="text-[9px] uppercase tracking-wider text-neutral-500 font-bold">Oracle Quorum</div>
           </div>
         </div>
-        <button onclick="verifyQueriedUser('${query}')" class="w-full bg-black text-white border-2 border-black py-3 px-4 font-display font-black text-xs uppercase tracking-wider hover:bg-neutral-800 transition-all flex items-center justify-center gap-2">
-          <i class="fa-solid fa-fingerprint"></i> Verify Claims for @${query}
+
+        <!-- Verification Action -->
+        <button onclick="verifyQueriedUser('${query}')" class="w-full bg-black text-white border-2 border-black py-3.5 px-4 font-display font-black text-xs uppercase tracking-wider hover:bg-neutral-800 transition-all flex items-center justify-center gap-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">
+          <i class="fa-solid fa-fingerprint"></i> Inscribe & Verify Claims for @${query}
         </button>
       </div>
     `;
