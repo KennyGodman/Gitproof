@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-white">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitProof — GitHub Activity Verifier on GenLayer</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;800;900&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Cinzel', 'serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              black: '#000000',
+              charcoal: '#111111',
+              dark: '#18181b',
+              gray: '#71717a',
+              light: '#f4f4f5',
+              border: '#e4e4e7',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Motion (Framer Motion Web API) -->
+  <script src="https://cdn.jsdelivr.net/npm/motion@11.11.17/dist/motion.js"></script>
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-white text-black font-sans antialiased min-h-full flex flex-col selection:bg-black selection:text-white">
+
+  <!-- Minimalist Top Navigation -->
+  <header class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-black/10 transition-all duration-300">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Brand Logo -->
+      <a href="#" class="flex items-center gap-3 group">
+        <div class="w-9 h-9 bg-black text-white flex items-center justify-center rounded-none border border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] group-hover:translate-x-0.5 group-hover:translate-y-0.5 group-hover:shadow-none transition-all">
+          <i class="fa-brands fa-github text-lg"></i>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="font-display font-black text-lg tracking-wider text-black">GITPROOF</span>
+          <span class="text-[10px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 border border-black/20 bg-neutral-100 text-neutral-800">
+            GenLayer AI VM
+          </span>
+        </div>
+      </a>
+
+      <!-- Center Tabs -->
+      <nav class="hidden md:flex items-center p-1 bg-neutral-100 border border-neutral-200 rounded-none gap-1">
+        <button class="nav-tab active px-4 py-1.5 text-xs font-semibold tracking-wide uppercase font-mono transition-all flex items-center gap-2 bg-black text-white shadow-sm" data-tab="tab-verify" id="nav-btn-verify">
+          <i class="fa-solid fa-bolt text-xs"></i> Verify Claims
+        </button>
+        <button class="nav-tab px-4 py-1.5 text-xs font-semibold tracking-wide uppercase font-mono transition-all flex items-center gap-2 text-neutral-600 hover:text-black hover:bg-white" data-tab="tab-bounties" id="nav-btn-bounties">
+          <i class="fa-solid fa-trophy text-xs"></i> Bounty Board
+        </button>
+        <button class="nav-tab px-4 py-1.5 text-xs font-semibold tracking-wide uppercase font-mono transition-all flex items-center gap-2 text-neutral-600 hover:text-black hover:bg-white" data-tab="tab-passport" id="nav-btn-passport">
+          <i class="fa-solid fa-id-card text-xs"></i> Dev Passport
+        </button>
+        <button class="nav-tab px-4 py-1.5 text-xs font-semibold tracking-wide uppercase font-mono transition-all flex items-center gap-2 text-neutral-600 hover:text-black hover:bg-white" data-tab="tab-contract" id="nav-btn-contract">
+          <i class="fa-solid fa-code text-xs"></i> Contract & VM
+        </button>
+      </nav>
+
+      <!-- Right Actions: GitHub Auth & Wallet -->
+      <div class="flex items-center gap-3">
+        <!-- Connect GitHub Button / Profile Pill -->
+        <div id="github-auth-container" class="relative">
+          <button id="btn-connect-github" class="px-3.5 py-1.5 bg-black text-white text-xs font-mono font-bold tracking-wide uppercase border border-black hover:bg-neutral-800 transition-all flex items-center gap-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">
+            <i class="fa-brands fa-github text-sm"></i>
+            <span>Connect GitHub</span>
+          </button>
+          
+          <div id="github-user-pill" class="hidden flex items-center gap-2 px-2.5 py-1 bg-white border-2 border-black font-mono text-xs shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+            <img src="https://avatars.githubusercontent.com/u/1024025?v=4" id="nav-github-avatar" class="w-5 h-5 border border-black rounded-none object-cover" alt="User">
+            <span class="font-bold text-black" id="nav-github-handle">@torvalds</span>
+            <span class="w-1.5 h-1.5 rounded-full bg-black"></span>
+            <button id="btn-disconnect-github" class="text-neutral-400 hover:text-black ml-1 text-xs" title="Disconnect">
+              <i class="fa-solid fa-arrow-right-from-bracket"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Wallet Connect Button -->
+        <button id="btn-connect-wallet" class="hidden sm:flex px-3.5 py-1.5 bg-white text-black text-xs font-mono font-bold tracking-wide uppercase border-2 border-black hover:bg-neutral-100 transition-all items-center gap-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+          <i class="fa-solid fa-wallet text-xs"></i>
+          <span id="wallet-btn-label">0x71cA...89A3</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    
+    <!-- Hero Section -->
+    <section class="text-center max-w-4xl mx-auto mb-14 motion-hero">
+      <div class="inline-flex items-center gap-2 px-3 py-1 border border-black bg-neutral-50 text-black text-xs font-mono font-bold tracking-widest uppercase mb-4 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+        <i class="fa-solid fa-microchip"></i> NON-DETERMINISTIC AI SMART CONTRACTS
+      </div>
+      <h1 class="text-4xl sm:text-5xl font-display font-black text-black tracking-tight uppercase leading-tight mb-4">
+        Verifiable GitHub Proofs on <span class="underline decoration-4 underline-offset-8">GenLayer</span>
+      </h1>
+      <p class="text-neutral-600 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
+        Prove on-chain code contributions and developer reputation. GenLayer Intelligent Contracts fetch public GitHub data and form multi-node AI consensus.
+      </p>
+
+      <!-- Quick Preset Demo Buttons -->
+      <div class="flex flex-wrap items-center justify-center gap-2 mt-8">
+        <span class="text-xs font-mono font-bold uppercase tracking-wider text-neutral-500 mr-1">Quick Demos:</span>
+        <button class="demo-chip px-3 py-1.5 bg-white border border-black text-xs font-mono font-semibold text-black hover:bg-black hover:text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all flex items-center gap-1.5" id="demo-torvalds">
+          <i class="fa-solid fa-user-check"></i> Linus Torvalds (>500 Contribs)
+        </button>
+        <button class="demo-chip px-3 py-1.5 bg-white border border-black text-xs font-mono font-semibold text-black hover:bg-black hover:text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all flex items-center gap-1.5" id="demo-vitalik">
+          <i class="fa-solid fa-code-branch"></i> Vitalik Buterin (go-ethereum)
+        </button>
+        <button class="demo-chip px-3 py-1.5 bg-white border border-black text-xs font-mono font-semibold text-black hover:bg-black hover:text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all flex items-center gap-1.5" id="demo-fake">
+          <i class="fa-solid fa-ban"></i> Fake User (Rejection Test)
+        </button>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- TAB 1: CLAIM & VERIFICATION CONSOLE -->
+    <!-- ================================================================= -->
+    <div id="tab-verify" class="tab-content active">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        
+        <!-- Left: Form & Consensus Pipeline (7 cols) -->
+        <div class="lg:col-span-7 bg-white border-2 border-black p-6 sm:p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+          
+          <div class="flex items-center justify-between border-b-2 border-black pb-4 mb-6">
+            <h2 class="font-display font-black text-xl uppercase tracking-wide flex items-center gap-2 text-black">
+              <i class="fa-solid fa-fingerprint"></i> Inscribe Activity Claim
+            </h2>
+            <span class="font-mono text-xs px-2.5 py-1 bg-neutral-100 border border-black text-black font-semibold">
+              Contract: 0x71cA...89A3
+            </span>
+          </div>
+
+          <!-- Claim Type Selection -->
+          <div class="mb-6">
+            <label class="block font-mono text-xs font-bold uppercase tracking-wider text-black mb-3">
+              1. Select Claim Type
+            </label>
+            <div class="grid grid-cols-3 gap-3">
+              <button class="claim-type-btn active text-left p-3 border-2 border-black bg-black text-white transition-all" data-type="contrib_count" id="type-contrib">
+                <i class="fa-solid fa-chart-line text-base mb-1 block"></i>
+                <span class="font-mono text-xs font-bold block uppercase">Contributions</span>
+                <span class="text-[10px] opacity-80 block">Min annual count</span>
+              </button>
+              <button class="claim-type-btn text-left p-3 border-2 border-neutral-300 bg-white text-black hover:border-black transition-all" data-type="repo_contrib" id="type-repo">
+                <i class="fa-solid fa-code-commit text-base mb-1 block"></i>
+                <span class="font-mono text-xs font-bold block uppercase">Repo Author</span>
+                <span class="text-[10px] text-neutral-500 block">Commit proof</span>
+              </button>
+              <button class="claim-type-btn text-left p-3 border-2 border-neutral-300 bg-white text-black hover:border-black transition-all" data-type="custom_claim" id="type-custom">
+                <i class="fa-solid fa-award text-base mb-1 block"></i>
+                <span class="font-mono text-xs font-bold block uppercase">Bounty Check</span>
+                <span class="text-[10px] text-neutral-500 block">AI qualitative</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Input Fields -->
+          <div class="mb-6">
+            <div class="flex items-center justify-between mb-2">
+              <label class="block font-mono text-xs font-bold uppercase tracking-wider text-black" for="input-username">
+                2. GitHub Username / Handle
+              </label>
+              <button type="button" id="btn-autofill-connected" class="hidden text-[11px] font-mono font-bold text-neutral-600 hover:text-black underline underline-offset-2 flex items-center gap-1">
+                <i class="fa-brands fa-github"></i> Use Connected Account
+              </button>
+            </div>
+            <div class="relative flex items-center">
+              <span class="absolute left-3.5 text-neutral-400 font-mono font-bold text-sm">@</span>
+              <input type="text" id="input-username" class="w-full bg-white border-2 border-black py-3 pl-8 pr-4 text-black font-mono text-sm focus:outline-none focus:bg-neutral-50 transition-all" placeholder="torvalds, vbuterin, your-handle" value="torvalds">
+            </div>
+          </div>
+
+          <!-- Dynamic Input 1: Min Contributions -->
+          <div class="mb-6" id="group-contrib-count">
+            <label class="block font-mono text-xs font-bold uppercase tracking-wider text-black mb-2" for="input-min-contrib">
+              3. Minimum Claimed Annual Contributions
+            </label>
+            <input type="number" id="input-min-contrib" class="w-full bg-white border-2 border-black py-3 px-4 text-black font-mono text-sm focus:outline-none focus:bg-neutral-50 transition-all" placeholder="500" value="500" min="1">
+          </div>
+
+          <!-- Dynamic Input 2: Repository Name -->
+          <div class="mb-6 hidden" id="group-repo-name">
+            <label class="block font-mono text-xs font-bold uppercase tracking-wider text-black mb-2" for="input-repo-name">
+              3. Target Repository (owner/repo)
+            </label>
+            <input type="text" id="input-repo-name" class="w-full bg-white border-2 border-black py-3 px-4 text-black font-mono text-sm focus:outline-none focus:bg-neutral-50 transition-all" placeholder="ethereum/go-ethereum" value="ethereum/go-ethereum">
+          </div>
+
+          <!-- Dynamic Input 3: Custom Statement -->
+          <div class="mb-6 hidden" id="group-custom-statement">
+            <label class="block font-mono text-xs font-bold uppercase tracking-wider text-black mb-2" for="input-custom-statement">
+              3. Claim Statement for AI Oracles
+            </label>
+            <input type="text" id="input-custom-statement" class="w-full bg-white border-2 border-black py-3 px-4 text-black font-mono text-sm focus:outline-none focus:bg-neutral-50 transition-all" placeholder="Active maintainer of open source developer tools" value="Active maintainer of open source developer tools">
+          </div>
+
+          <!-- Action Button: Solid Black -->
+          <button id="btn-submit-claim" class="w-full bg-black text-white border-2 border-black py-4 px-6 font-display font-black text-sm tracking-widest uppercase hover:bg-neutral-800 transition-all flex items-center justify-center gap-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none">
+            <i class="fa-solid fa-play text-xs"></i>
+            <span>EXECUTE GENLAYER VERIFICATION</span>
+          </button>
+
+          <!-- Consensus Execution Visualizer -->
+          <div class="mt-8 pt-6 border-t-2 border-black">
+            <div class="flex items-center justify-between mb-4">
+              <span class="font-display font-bold text-xs uppercase tracking-wider text-black">
+                GenVM Consensus Pipeline
+              </span>
+              <span id="consensus-status-badge" class="font-mono text-xs font-bold uppercase px-2 py-0.5 bg-black text-white">
+                IDLE
+              </span>
+            </div>
+
+            <div class="space-y-3 font-mono text-xs">
+              <div class="step-item p-3 border border-neutral-300 bg-neutral-50 flex items-start gap-3 transition-all" id="step-1">
+                <span class="step-badge w-5 h-5 flex items-center justify-center font-bold border border-black bg-white text-black">1</span>
+                <div>
+                  <div class="font-bold text-black">Non-deterministic Web Fetch (Leader)</div>
+                  <div class="text-[11px] text-neutral-600"><code>gl.nondet.web.render()</code> extracts GitHub DOM</div>
+                </div>
+              </div>
+
+              <div class="step-item p-3 border border-neutral-300 bg-neutral-50 flex items-start gap-3 transition-all" id="step-2">
+                <span class="step-badge w-5 h-5 flex items-center justify-center font-bold border border-black bg-white text-black">2</span>
+                <div>
+                  <div class="font-bold text-black">LLM Prompt Evaluation</div>
+                  <div class="text-[11px] text-neutral-600"><code>gl.nondet.exec_prompt()</code> parses commit facts</div>
+                </div>
+              </div>
+
+              <div class="step-item p-3 border border-neutral-300 bg-neutral-50 flex items-start gap-3 transition-all" id="step-3">
+                <span class="step-badge w-5 h-5 flex items-center justify-center font-bold border border-black bg-white text-black">3</span>
+                <div>
+                  <div class="font-bold text-black">Multi-Node Validator Consensus</div>
+                  <div class="text-[11px] text-neutral-600"><code>gl.eq_principle.prompt_non_comparative()</code> quorum vote</div>
+                </div>
+              </div>
+
+              <div class="step-item p-3 border border-neutral-300 bg-neutral-50 flex items-start gap-3 transition-all" id="step-4">
+                <span class="step-badge w-5 h-5 flex items-center justify-center font-bold border border-black bg-white text-black">4</span>
+                <div>
+                  <div class="font-bold text-black">On-Chain State Commit & Passport Mint</div>
+                  <div class="text-[11px] text-neutral-600">Contract updates Developer Passport storage</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Validator Nodes Cluster Map -->
+            <div class="mt-6">
+              <div class="font-mono text-[11px] font-bold uppercase tracking-wider text-neutral-700 mb-2">
+                Oracle Validator Quorum (3/5 Required):
+              </div>
+              <div class="grid grid-cols-5 gap-2">
+                <div class="node-box p-2 border border-black bg-neutral-50 text-center font-mono text-[11px]" id="node-0">
+                  <div class="font-bold text-black">Oracle 1</div>
+                  <div class="text-[9px] text-neutral-500 uppercase">Leader</div>
+                  <div class="node-vote font-bold text-[10px] mt-1 text-black" id="vote-0">STANDBY</div>
+                </div>
+                <div class="node-box p-2 border border-neutral-300 bg-white text-center font-mono text-[11px]" id="node-1">
+                  <div class="font-bold text-black">Oracle 2</div>
+                  <div class="text-[9px] text-neutral-500 uppercase">Validator</div>
+                  <div class="node-vote font-bold text-[10px] mt-1 text-neutral-400" id="vote-1">STANDBY</div>
+                </div>
+                <div class="node-box p-2 border border-neutral-300 bg-white text-center font-mono text-[11px]" id="node-2">
+                  <div class="font-bold text-black">Oracle 3</div>
+                  <div class="text-[9px] text-neutral-500 uppercase">Validator</div>
+                  <div class="node-vote font-bold text-[10px] mt-1 text-neutral-400" id="vote-2">STANDBY</div>
+                </div>
+                <div class="node-box p-2 border border-neutral-300 bg-white text-center font-mono text-[11px]" id="node-3">
+                  <div class="font-bold text-black">Oracle 4</div>
+                  <div class="text-[9px] text-neutral-500 uppercase">Validator</div>
+                  <div class="node-vote font-bold text-[10px] mt-1 text-neutral-400" id="vote-3">STANDBY</div>
+                </div>
+                <div class="node-box p-2 border border-neutral-300 bg-white text-center font-mono text-[11px]" id="node-4">
+                  <div class="font-bold text-black">Oracle 5</div>
+                  <div class="text-[9px] text-neutral-500 uppercase">Validator</div>
+                  <div class="node-vote font-bold text-[10px] mt-1 text-neutral-400" id="vote-4">STANDBY</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Final Verification Result Card -->
+          <div id="result-container" class="mt-6 p-5 border-2 border-black bg-neutral-50 hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+            <div class="flex items-center justify-between mb-2">
+              <span class="status-tag inline-flex items-center gap-1.5 px-3 py-1 bg-black text-white font-mono text-xs font-bold uppercase tracking-wider" id="result-status-tag">
+                <i class="fa-solid fa-circle-check"></i> VERIFIED ON-CHAIN
+              </span>
+              <span id="result-tx-hash" class="font-mono text-xs text-neutral-600">
+                Tx: 0x9f1a...482c
+              </span>
+            </div>
+            <div class="text-sm font-sans font-medium text-black mt-2" id="result-meta-text">
+              Target: >=500 contributions | User: torvalds
+            </div>
+            <div class="mt-3 p-3 bg-white border border-neutral-300 font-mono text-xs text-neutral-800 leading-relaxed" id="result-reasoning-text">
+              Consensus reasoning will appear here...
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right: Live Verifiable Dev Passport (5 cols) -->
+        <div class="lg:col-span-5 space-y-6">
+          
+          <!-- Passport Card -->
+          <div class="bg-white border-2 border-black p-6 sm:p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] relative">
+            
+            <div class="flex items-center justify-between border-b-2 border-black pb-4 mb-6">
+              <div class="font-display font-black text-sm uppercase tracking-widest flex items-center gap-2 text-black">
+                <i class="fa-solid fa-shield-halved"></i> GENLAYER DEV PASSPORT
+              </div>
+              <div class="w-8 h-8 bg-black text-white flex items-center justify-center font-bold text-xs">
+                GP
+              </div>
+            </div>
+
+            <div class="flex items-center gap-4 mb-6">
+              <img src="https://avatars.githubusercontent.com/u/1024025?v=4" id="passport-avatar" class="w-16 h-16 border-2 border-black object-cover" alt="Avatar">
+              <div>
+                <h3 class="font-display font-black text-xl text-black uppercase" id="passport-username">torvalds</h3>
+                <p class="font-mono text-xs text-neutral-500" id="passport-id">ID: GP-TORVALDS-GENLAYER</p>
+              </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-3 gap-2 p-3 bg-neutral-100 border border-black mb-6 text-center">
+              <div>
+                <div class="font-display font-black text-xl text-black" id="passport-trust-score">98%</div>
+                <div class="font-mono text-[9px] uppercase tracking-wider text-neutral-500 font-bold">Trust Score</div>
+              </div>
+              <div>
+                <div class="font-display font-black text-xl text-black" id="passport-verified-count">2</div>
+                <div class="font-mono text-[9px] uppercase tracking-wider text-neutral-500 font-bold">Verified</div>
+              </div>
+              <div>
+                <div class="font-display font-black text-xl text-black" id="passport-detected-contribs">3,420</div>
+                <div class="font-mono text-[9px] uppercase tracking-wider text-neutral-500 font-bold">Contribs</div>
+              </div>
+            </div>
+
+            <!-- Badges -->
+            <div class="mb-6">
+              <div class="font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-500 mb-2">
+                On-Chain Verified Badges:
+              </div>
+              <div class="flex flex-wrap gap-2" id="passport-badges-list">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-black text-white font-mono text-[11px] font-bold">
+                  <i class="fa-solid fa-medal text-[10px]"></i> 500+ Annual Contributor
+                </span>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-black text-white font-mono text-[11px] font-bold">
+                  <i class="fa-solid fa-crown text-[10px]"></i> Core Kernel Contributor
+                </span>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-black text-white font-mono text-[11px] font-bold">
+                  <i class="fa-solid fa-shield text-[10px]"></i> Web3 Verified
+                </span>
+              </div>
+            </div>
+
+            <div class="border-t border-neutral-200 pt-4 flex items-center justify-between font-mono text-[10px] text-neutral-500">
+              <span>ISSUER: GENLAYER VM</span>
+              <span>EQUIVALENCE CONSENSUS</span>
+            </div>
+
+          </div>
+
+          <!-- Credential Export Widget -->
+          <div class="bg-neutral-50 border-2 border-black p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-display font-bold text-xs uppercase tracking-wider text-black flex items-center gap-1.5">
+                <i class="fa-solid fa-share-nodes"></i> Verifiable Credential Export
+              </span>
+              <button id="btn-copy-proof" class="px-2.5 py-1 bg-black text-white font-mono text-xs font-bold hover:bg-neutral-800 transition-all">
+                Copy Proof JSON
+              </button>
+            </div>
+            <p class="text-xs text-neutral-600 leading-relaxed font-sans">
+              This credential is cryptographically verifiable by Web3 hiring DAOs, grant programs, and bounty protocols directly via GenLayer contract RPC.
+            </p>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- TAB 2: BOUNTY & HIRING BOARD -->
+    <!-- ================================================================= -->
+    <div id="tab-bounties" class="tab-content">
+      <div class="mb-8">
+        <h2 class="text-2xl sm:text-3xl font-display font-black text-black uppercase tracking-tight mb-2">
+          Web3 Bounties & Verified Hiring
+        </h2>
+        <p class="text-neutral-600 text-sm sm:text-base">
+          Protocols configure autonomous eligibility standards. Connect your verified GitHub passport to claim rewards instantly.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <!-- Bounty 1 -->
+        <div class="bg-white border-2 border-black p-6 shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="font-mono text-xs font-bold uppercase text-neutral-600"><i class="fa-brands fa-ethereum mr-1"></i> Ethereum Grant</span>
+              <span class="px-2.5 py-0.5 bg-black text-white font-mono text-xs font-bold">$8,500 USDC</span>
+            </div>
+            <h3 class="font-display font-bold text-lg text-black uppercase mb-2">Core Protocol Optimization</h3>
+            <p class="text-xs text-neutral-700 bg-neutral-100 p-3 border border-neutral-300 font-mono mb-4">
+              <strong>Requirement:</strong> Verified commits to <code>ethereum/go-ethereum</code>.
+            </p>
+          </div>
+          <button class="w-full bg-black text-white border-2 border-black py-3 px-4 font-display font-black text-xs tracking-wider uppercase hover:bg-neutral-800 transition-all flex items-center justify-center gap-2 apply-bounty-btn" data-req-type="repo" data-req-target="ethereum/go-ethereum">
+            <i class="fa-solid fa-stamp"></i> Verify & Apply
+          </button>
+        </div>
+
+        <!-- Bounty 2 -->
+        <div class="bg-white border-2 border-black p-6 shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="font-mono text-xs font-bold uppercase text-neutral-600"><i class="fa-solid fa-cubes mr-1"></i> Arbitrum DAO</span>
+              <span class="px-2.5 py-0.5 bg-black text-white font-mono text-xs font-bold">$4,000 ARB</span>
+            </div>
+            <h3 class="font-display font-bold text-lg text-black uppercase mb-2">Open Source Builder Fellowship</h3>
+            <p class="text-xs text-neutral-700 bg-neutral-100 p-3 border border-neutral-300 font-mono mb-4">
+              <strong>Requirement:</strong> Proven activity of >= 300 annual GitHub contributions.
+            </p>
+          </div>
+          <button class="w-full bg-black text-white border-2 border-black py-3 px-4 font-display font-black text-xs tracking-wider uppercase hover:bg-neutral-800 transition-all flex items-center justify-center gap-2 apply-bounty-btn" data-req-type="contrib" data-req-target="300">
+            <i class="fa-solid fa-stamp"></i> Verify & Apply
+          </button>
+        </div>
+
+        <!-- Bounty 3 -->
+        <div class="bg-white border-2 border-black p-6 shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="font-mono text-xs font-bold uppercase text-neutral-600"><i class="fa-solid fa-microchip mr-1"></i> GenLayer Grants</span>
+              <span class="px-2.5 py-0.5 bg-black text-white font-mono text-xs font-bold">$12,000 GEN</span>
+            </div>
+            <h3 class="font-display font-bold text-lg text-black uppercase mb-2">Intelligent Contract Contributor</h3>
+            <p class="text-xs text-neutral-700 bg-neutral-100 p-3 border border-neutral-300 font-mono mb-4">
+              <strong>Requirement:</strong> Contributor to Python AI or consensus frameworks.
+            </p>
+          </div>
+          <button class="w-full bg-black text-white border-2 border-black py-3 px-4 font-display font-black text-xs tracking-wider uppercase hover:bg-neutral-800 transition-all flex items-center justify-center gap-2 apply-bounty-btn" data-req-type="custom" data-req-target="Python AI or consensus contributor">
+            <i class="fa-solid fa-stamp"></i> Verify & Apply
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- TAB 3: DEV PASSPORT EXPLORER -->
+    <!-- ================================================================= -->
+    <div id="tab-passport" class="tab-content">
+      <div class="bg-white border-2 border-black p-6 sm:p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] max-w-4xl mx-auto">
+        <div class="flex items-center justify-between border-b-2 border-black pb-4 mb-6">
+          <h2 class="font-display font-black text-xl uppercase tracking-wide flex items-center gap-2 text-black">
+            <i class="fa-solid fa-address-book"></i> Developer Passport Directory
+          </h2>
+          <span class="font-mono text-xs text-neutral-500 uppercase">QUERY ON-CHAIN REPUTATION</span>
+        </div>
+
+        <div class="flex gap-3 mb-6">
+          <input type="text" id="passport-search-input" class="w-full bg-white border-2 border-black py-3 px-4 text-black font-mono text-sm focus:outline-none focus:bg-neutral-50" placeholder="Enter GitHub handle (e.g. torvalds, vbuterin, karalabe)...">
+          <button id="btn-search-passport" class="bg-black text-white border-2 border-black px-6 py-3 font-display font-black text-xs uppercase tracking-wider hover:bg-neutral-800 transition-all flex items-center gap-2 flex-shrink-0">
+            <i class="fa-solid fa-magnifying-glass"></i> LOOKUP
+          </button>
+        </div>
+
+        <div id="passport-lookup-result">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- TAB 4: SMART CONTRACT & VM INSPECTOR -->
+    <!-- ================================================================= -->
+    <div id="tab-contract" class="tab-content">
+      <div class="bg-white border-2 border-black p-6 sm:p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+        <div class="flex items-center justify-between border-b-2 border-black pb-4 mb-6">
+          <h2 class="font-display font-black text-xl uppercase tracking-wide flex items-center gap-2 text-black">
+            <i class="fa-solid fa-code"></i> contracts/github_verifier.py (GenLayer Intelligent Contract)
+          </h2>
+          <span class="font-mono text-xs px-2.5 py-1 bg-black text-white font-bold">
+            GenVM Python 3.12+
+          </span>
+        </div>
+
+        <div class="border-2 border-black bg-neutral-900 text-neutral-100 font-mono text-xs overflow-hidden">
+          <div class="bg-black px-4 py-2 flex items-center justify-between border-b border-neutral-700 text-neutral-400 text-[11px]">
+            <span>github_verifier.py</span>
+            <span>Equivalence Principle: prompt_non_comparative</span>
+          </div>
+          <pre class="p-4 overflow-x-auto text-[13px] leading-relaxed text-neutral-200"><code># { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
+from genlayer import *
+import json
+
+class GitHubActivityVerifier(gl.Contract):
+    claims: TreeMap[str, str]
+
+    def __init__(self):
+        self.claims = TreeMap()
+
+    @gl.public.write
+    def verify_contribution_count(self, github_handle: str, min_contributions: str) -> str:
+        handle = github_handle.strip().lstrip('@')
+        claim_id = f"{handle}_contrib_{min_contributions}"
+
+        def evaluate():
+            profile_url = f"https://github.com/{handle}"
+            web_data = gl.nondet.web.render(profile_url, mode='html')
+            prompt = f"""
+            You are a validator verifying if GitHub user '{handle}' has at least {min_contributions} contributions in the past year.
+            GitHub Profile HTML:
+            {web_data[:10000]}
+            
+            Return a JSON object:
+            {{"verified": true, "detected": 500, "status": "VERIFIED", "reason": "found contributions"}}
+            """
+            return gl.nondet.exec_prompt(prompt)
+
+        result = gl.eq_principle.prompt_non_comparative(
+            evaluate,
+            criteria="Result must be a valid JSON with verified boolean and reason."
+        )
+        self.claims[claim_id] = result
+        return result
+
+    @gl.public.write
+    def verify_repo_contribution(self, github_handle: str, repo: str) -> str:
+        handle = github_handle.strip().lstrip('@')
+        clean_repo = repo.strip().strip('/')
+        claim_id = f"{handle}_repo_{clean_repo.replace('/', '_')}"
+
+        def evaluate():
+            commits_url = f"https://github.com/{clean_repo}/commits?author={handle}"
+            commits_page = gl.nondet.web.render(commits_url, mode='html')
+            prompt = f"""
+            Verify if GitHub user '{handle}' has authored commits in repository '{clean_repo}'.
+            Commits HTML:
+            {commits_page[:10000]}
+            
+            Return a JSON object:
+            {{"verified": true, "commits_found": true, "status": "VERIFIED", "reason": "commits present"}}
+            """
+            return gl.nondet.exec_prompt(prompt)
+
+        result = gl.eq_principle.prompt_non_comparative(
+            evaluate,
+            criteria="Result must be a valid JSON with verified boolean and reason."
+        )
+        self.claims[claim_id] = result
+        return result
+
+    @gl.public.view
+    def get_claim(self, claim_id: str) -> str:
+        return self.claims.get(claim_id, "Claim not found")
+</code></pre>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- GitHub Connect Modal -->
+  <div id="github-auth-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-white border-2 border-black max-w-md w-full p-6 sm:p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative">
+      <button id="modal-close-btn" class="absolute top-4 right-4 text-neutral-400 hover:text-black font-mono font-bold text-lg">
+        ✕
+      </button>
+
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 bg-black text-white flex items-center justify-center mx-auto mb-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+          <i class="fa-brands fa-github text-2xl"></i>
+        </div>
+        <h3 class="font-display font-black text-xl uppercase tracking-tight text-black">
+          Connect GitHub Account
+        </h3>
+        <p class="text-xs text-neutral-600 font-sans mt-1">
+          Authenticate ownership of your GitHub identity and bind it to your connected Web3 address.
+        </p>
+      </div>
+
+      <!-- Quick OAuth Simulation Options -->
+      <div class="space-y-3 mb-6 font-mono text-xs">
+        <div class="text-[11px] font-bold uppercase text-neutral-500 tracking-wider">Select Account to Authorize:</div>
+        
+        <button class="auth-select-profile w-full p-3 border-2 border-black bg-white hover:bg-neutral-50 text-left flex items-center justify-between transition-all" data-username="torvalds">
+          <div class="flex items-center gap-3">
+            <img src="https://avatars.githubusercontent.com/u/1024025?v=4" class="w-8 h-8 border border-black" alt="Torvalds">
+            <div>
+              <div class="font-bold text-black">Linus Torvalds</div>
+              <div class="text-[10px] text-neutral-500">@torvalds</div>
+            </div>
+          </div>
+          <span class="text-[11px] font-bold text-black">Authorize →</span>
+        </button>
+
+        <button class="auth-select-profile w-full p-3 border-2 border-black bg-white hover:bg-neutral-50 text-left flex items-center justify-between transition-all" data-username="vbuterin">
+          <div class="flex items-center gap-3">
+            <img src="https://avatars.githubusercontent.com/u/2230894?v=4" class="w-8 h-8 border border-black" alt="Vitalik">
+            <div>
+              <div class="font-bold text-black">Vitalik Buterin</div>
+              <div class="text-[10px] text-neutral-500">@vbuterin</div>
+            </div>
+          </div>
+          <span class="text-[11px] font-bold text-black">Authorize →</span>
+        </button>
+
+        <!-- Custom Username Connect -->
+        <div class="pt-2">
+          <label class="block font-mono text-[11px] font-bold uppercase text-neutral-700 mb-1.5">Or Enter Your GitHub Handle:</label>
+          <div class="flex gap-2">
+            <input type="text" id="custom-auth-handle" placeholder="your-username" class="w-full border-2 border-black px-3 py-2 text-xs font-mono focus:outline-none focus:bg-neutral-50">
+            <button id="btn-custom-auth" class="bg-black text-white px-4 py-2 font-mono font-bold text-xs uppercase hover:bg-neutral-800 flex-shrink-0">
+              Sign In
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="border-t border-neutral-200 pt-3 text-[10px] font-mono text-neutral-500 text-center">
+        Read-only public identity & commit verification. No private write access requested.
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="border-t border-neutral-200 bg-neutral-50 py-6 mt-16 text-center font-mono text-xs text-neutral-500">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div>GITPROOF • POWERED BY GENLAYER INTELLIGENT VM</div>
+      <div>EQUIVALENCE CONSENSUS ENGINE • 2026</div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

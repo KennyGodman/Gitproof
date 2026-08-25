@@ -1,0 +1,98 @@
+/* =========================================================================
+ * GITPROOF — CLEAN HIGH-CONTRAST WHITE THEME (TAILWIND COMPANION)
+ * Pure White Background (#ffffff), Jet Black Typography (#000000),
+ * Solid Black Buttons with Neo-Brutalist & Minimalist Polish
+ * ========================================================================= */
+
+@layer base {
+  body {
+    background-color: #ffffff;
+    color: #000000;
+  }
+}
+
+/* Custom Selection */
+::selection {
+  background-color: #000000;
+  color: #ffffff;
+}
+
+/* Tab Switching Transitions */
+.tab-content {
+  display: none;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+}
+
+.tab-content.active {
+  display: block;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Step Items Active / Done States */
+.step-item.active {
+  border-color: #000000;
+  background-color: #ffffff;
+  box-shadow: 2px 2px 0px 0px rgba(0, 0, 0, 1);
+}
+
+.step-item.active .step-badge {
+  background-color: #000000;
+  color: #ffffff;
+}
+
+.step-item.done {
+  border-color: #000000;
+  background-color: #f4f4f5;
+}
+
+.step-item.done .step-badge {
+  background-color: #000000;
+  color: #ffffff;
+}
+
+/* Oracle Node Box States */
+.node-box.leader {
+  border-color: #000000;
+  background-color: #f4f4f5;
+}
+
+.node-box.voted-yes {
+  border-color: #000000;
+  background-color: #ffffff;
+  box-shadow: 2px 2px 0px 0px rgba(0, 0, 0, 1);
+}
+
+.node-box.voted-yes .node-vote {
+  color: #000000;
+  font-weight: 800;
+}
+
+.node-box.voted-no {
+  border-color: #71717a;
+  background-color: #f4f4f5;
+  opacity: 0.7;
+}
+
+.node-box.voted-no .node-vote {
+  color: #71717a;
+}
+
+/* Custom Scrollbar for Code Blocks */
+pre::-webkit-scrollbar {
+  height: 6px;
+}
+
+pre::-webkit-scrollbar-track {
+  background: #18181b;
+}
+
+pre::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+}
+
+pre::-webkit-scrollbar-thumb:hover {
+  background: #71717a;
+}
