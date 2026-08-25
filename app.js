@@ -46,6 +46,7 @@ const demoProfileData = {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
+  setupLandingAndAppLauncher();
   setupNavigation();
   setupClaimTypeSelector();
   setupQuickDemos();
@@ -64,25 +65,147 @@ document.addEventListener("DOMContentLoaded", () => {
     badges: ["500+ Annual Contributor", "Core Kernel Contributor", "Web3 Verified"]
   });
 
-  // Trigger Framer Motion / Motion animation
-  triggerEntranceAnimations();
+  // Trigger Framer Motion / Motion animation for Landing Page
+  triggerLandingAnimations();
 });
+
+/* =========================================================================
+ * LANDING PAGE & APP LAUNCHER TRANSITION
+ * ========================================================================= */
+function setupLandingAndAppLauncher() {
+  const launchButtons = document.querySelectorAll(".btn-launch-app");
+  const landingView = document.getElementById("view-landing");
+  const dappView = document.getElementById("view-dapp");
+  const loadingScreen = document.getElementById("loading-screen");
+  const backToLandingBtn = document.getElementById("btn-back-to-landing");
+
+  launchButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      launchAppWithLoadingAnimation();
+    });
+  });
+
+  if (backToLandingBtn) {
+    backToLandingBtn.addEventListener("click", () => {
+      dappView.classList.add("hidden");
+      dappView.classList.remove("flex");
+      landingView.classList.remove("hidden");
+      landingView.classList.add("flex");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      triggerLandingAnimations();
+    });
+  }
+}
+
+async function launchAppWithLoadingAnimation() {
+  const landingView = document.getElementById("view-landing");
+  const dappView = document.getElementById("view-dapp");
+  const loadingScreen = document.getElementById("loading-screen");
+  const progressBar = document.getElementById("loading-progress-bar");
+  const subtext = document.getElementById("loading-subtext");
+
+  // Show loading overlay
+  loadingScreen.classList.remove("hidden");
+  loadingScreen.classList.add("flex");
+
+  if (window.Motion && window.Motion.animate) {
+    window.Motion.animate(loadingScreen, { opacity: [0, 1] }, { duration: 0.25 });
+  }
+
+  // Reset loading logs state
+  resetLoadingSteps();
+  progressBar.style.width = "0%";
+  subtext.textContent = "Connecting to GenLayer AI Validator Quorum...";
+
+  // Step 1: Validator Quorum
+  setLoadingStep(1, "active");
+  progressBar.style.width = "25%";
+  await sleep(450);
+
+  // Step 2: Equivalence Principle Engine
+  setLoadingStep(1, "done");
+  setLoadingStep(2, "active");
+  progressBar.style.width = "50%";
+  subtext.textContent = "Calibrating Non-Deterministic Web Oracles...";
+  await sleep(500);
+
+  // Step 3: Contract Schema Fetch
+  setLoadingStep(2, "done");
+  setLoadingStep(3, "active");
+  progressBar.style.width = "75%";
+  subtext.textContent = "Loading Intelligent Contract 0x71cA...89A3...";
+  await sleep(450);
+
+  // Step 4: Passport Inscription Registry
+  setLoadingStep(3, "done");
+  setLoadingStep(4, "active");
+  progressBar.style.width = "100%";
+  subtext.textContent = "Ready. Launching GitProof Console...";
+  await sleep(400);
+  setLoadingStep(4, "done");
+
+  await sleep(300);
+
+  // Hide loading screen & swap views
+  if (window.Motion && window.Motion.animate) {
+    await window.Motion.animate(loadingScreen, { opacity: [1, 0] }, { duration: 0.3 }).finished;
+  }
+  loadingScreen.classList.add("hidden");
+  loadingScreen.classList.remove("flex");
+
+  landingView.classList.add("hidden");
+  landingView.classList.remove("flex");
+
+  dappView.classList.remove("hidden");
+  dappView.classList.add("flex");
+  window.scrollTo({ top: 0, behavior: "auto" });
+
+  triggerDAppAnimations();
+}
+
+function resetLoadingSteps() {
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById(`log-step-${i}`);
+    if (el) {
+      el.className = "flex items-center gap-2 text-neutral-400";
+      const icon = el.querySelector("i");
+      if (icon) icon.className = "fa-regular fa-circle text-neutral-300";
+    }
+  }
+}
+
+function setLoadingStep(stepNum, status) {
+  const el = document.getElementById(`log-step-${stepNum}`);
+  if (!el) return;
+
+  const icon = el.querySelector("i");
+  if (status === "active") {
+    el.className = "flex items-center gap-2 font-bold text-black";
+    if (icon) icon.className = "fa-solid fa-circle-notch fa-spin text-black";
+  } else if (status === "done") {
+    el.className = "flex items-center gap-2 text-neutral-700";
+    if (icon) icon.className = "fa-solid fa-check text-black font-bold";
+  }
+}
 
 /* =========================================================================
  * MOTION / FRAMER MOTION ENTRANCE ANIMATIONS
  * ========================================================================= */
-function triggerEntranceAnimations() {
+function triggerLandingAnimations() {
   if (window.Motion && window.Motion.animate) {
     const { animate, stagger } = window.Motion;
-    
-    // Animate hero
-    animate(".motion-hero", { opacity: [0, 1], y: [16, 0] }, { duration: 0.6, easing: "ease-out" });
-    
-    // Animate demo chips with stagger
-    animate(".demo-chip", { opacity: [0, 1], y: [10, 0] }, { delay: stagger(0.08), duration: 0.4 });
-    
-    // Animate cards
-    animate("#tab-verify > div > div", { opacity: [0, 1], y: [20, 0] }, { delay: stagger(0.15), duration: 0.5, easing: "ease-out" });
+    animate("#view-landing h1", { opacity: [0, 1], y: [20, 0] }, { duration: 0.6, easing: "ease-out" });
+    animate("#view-landing p", { opacity: [0, 1], y: [15, 0] }, { delay: 0.15, duration: 0.5, easing: "ease-out" });
+    animate("#view-landing .btn-launch-app", { opacity: [0, 1], scale: [0.96, 1] }, { delay: 0.25, duration: 0.4 });
+  }
+}
+
+function triggerDAppAnimations() {
+  if (window.Motion && window.Motion.animate) {
+    const { animate, stagger } = window.Motion;
+    animate("#view-dapp .motion-hero", { opacity: [0, 1], y: [16, 0] }, { duration: 0.5, easing: "ease-out" });
+    animate("#view-dapp .demo-chip", { opacity: [0, 1], y: [10, 0] }, { delay: stagger(0.06), duration: 0.35 });
+    animate("#tab-verify > div > div", { opacity: [0, 1], y: [18, 0] }, { delay: stagger(0.12), duration: 0.45, easing: "ease-out" });
   }
 }
 
