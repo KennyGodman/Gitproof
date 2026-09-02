@@ -1,4 +1,4 @@
-# TOKI - GitHub Reputation Court on GenLayer ⚡
+# Gitproof - GitHub Reputation Court on GenLayer ⚡
 
 > **Intelligent Smart Contract for Decentralized GitHub Activity & Contribution Verification using GenLayer and Multi-Judge AI Consensus.**
 
@@ -6,7 +6,7 @@
 
 ## 📌 Overview
 
-**TOKI (Reputation Court)** allows developers to prove real-world GitHub achievements on-chain:
+**Gitproof (Reputation Court)** allows developers to prove real-world GitHub achievements on-chain:
 - *"I have 500+ GitHub contributions in the past year."*
 - *"I contributed code/commits to `ethereum/go-ethereum`."*
 - *"I am an active open source maintainer of developer tooling."*
@@ -33,7 +33,7 @@ The browser application directly interfaces with the submitted GenLayer Intellig
 sequenceDiagram
     autonumber
     actor User as Web3 Developer / Bounty Hunter
-    participant DApp as TOKI Court Frontend
+    participant DApp as Gitproof Court Frontend
     participant Provider as GenLayer SDK / RPC Client
     participant Leader as Leader Validator Node
     participant GitHub as Public GitHub Web / API

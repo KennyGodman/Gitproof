@@ -1,5 +1,5 @@
 /**
- * TOKI: GitHub Reputation Court on GenLayer
+ * Gitproof: GitHub Reputation Court on GenLayer
  * Real GenLayer JS SDK & Intelligent Contract Integration
  * 
  * Contract Methods:
@@ -55,17 +55,17 @@ const DEFAULT_CONTRACT_ADDRESS = "0x71cA56e54F4c5a0fC1642f88aD471e9889A3";
 
 // State Management
 export const appState = {
-  selectedNetwork: localStorage.getItem("toki_network") || "testnet-asimov",
-  contractAddress: localStorage.getItem("toki_contract_addr") || DEFAULT_CONTRACT_ADDRESS,
-  customRpcUrl: localStorage.getItem("toki_custom_rpc") || "https://studio.genlayer.com/api",
-  walletMode: localStorage.getItem("toki_wallet_mode") || "embedded", // 'metamask' | 'embedded'
+  selectedNetwork: localStorage.getItem("gitproof_network") || "testnet-asimov",
+  contractAddress: localStorage.getItem("gitproof_contract_addr") || DEFAULT_CONTRACT_ADDRESS,
+  customRpcUrl: localStorage.getItem("gitproof_custom_rpc") || "https://studio.genlayer.com/api",
+  walletMode: localStorage.getItem("gitproof_wallet_mode") || "embedded", // 'metamask' | 'embedded'
   walletAddress: null,
   walletBalance: "0.00",
   connectedPrivateKey: null,
   currentPassportUsername: "torvalds",
   currentClaimType: "contrib_count",
   isVerifying: false,
-  recentTransactions: JSON.parse(localStorage.getItem("toki_recent_txs") || "[]")
+  recentTransactions: JSON.parse(localStorage.getItem("gitproof_recent_txs") || "[]")
 };
 
 // =========================================================================
@@ -296,10 +296,10 @@ export const genlayerClient = new GenLayerProvider(appState.selectedNetwork);
 
 export function initWallet() {
   // Check for saved embedded private key or generate new one
-  let savedKey = localStorage.getItem("toki_genlayer_pk");
+  let savedKey = localStorage.getItem("gitproof_genlayer_pk");
   if (!savedKey) {
     savedKey = generateRandomPrivateKey();
-    localStorage.setItem("toki_genlayer_pk", savedKey);
+    localStorage.setItem("gitproof_genlayer_pk", savedKey);
   }
   appState.connectedPrivateKey = savedKey;
 
@@ -341,7 +341,7 @@ export async function connectMetaMask() {
     if (accounts && accounts.length > 0) {
       appState.walletMode = "metamask";
       appState.walletAddress = accounts[0];
-      localStorage.setItem("toki_wallet_mode", "metamask");
+      localStorage.setItem("gitproof_wallet_mode", "metamask");
       await refreshWalletBalance();
       updateWalletUI();
       closeModal("wallet-modal");
@@ -354,7 +354,7 @@ export async function connectMetaMask() {
 
 export function switchToEmbeddedAccount() {
   appState.walletMode = "embedded";
-  localStorage.setItem("toki_wallet_mode", "embedded");
+  localStorage.setItem("gitproof_wallet_mode", "embedded");
   appState.walletAddress = deriveAddressFromKey(appState.connectedPrivateKey);
   refreshWalletBalance();
   updateWalletUI();
@@ -690,12 +690,12 @@ export async function loadAndDisplayPassport(username) {
   // Check on-chain claim for this user
   const contribClaimId = `${username}_contrib_500`;
   const onChainClaim = await queryContractClaim(contribClaimId);
-  const hasOnChainProof = onChainClaim && onChainClaim !== "Claim not found";
+  const hasProof = onChainClaim && onChainClaim !== "Claim not found";
 
   updatePassportUI(username, {
     avatar: profile.avatar_url,
-    trustScore: hasOnChainProof ? 99 : 82,
-    verifiedCount: hasOnChainProof ? 2 : 1,
+    trustScore: hasProof ? 99 : 82,
+    verifiedCount: hasProof ? 2 : 1,
     annualContribs: profile.annualContribs,
     badges: hasOnChainProof ? [
       "500+ Annual Contributor (GenLayer Verified)",
@@ -798,7 +798,7 @@ function updatePassportUI(username, data) {
   const avatarEl = document.getElementById("passport-avatar");
 
   if (usernameEl) usernameEl.textContent = username;
-  if (idEl) idEl.textContent = `ID: TOKI-${username.toUpperCase()}-GENLAYER`;
+  if (idEl) idEl.textContent = `ID: GITPROOF-${username.toUpperCase()}-GENLAYER`;
   if (scoreEl) scoreEl.textContent = `${data.trustScore}%`;
   if (countEl) countEl.textContent = data.verifiedCount || "0";
   if (contribEl) contribEl.textContent = (data.annualContribs || 0).toLocaleString();
@@ -817,7 +817,7 @@ function updatePassportUI(username, data) {
 function recordTransaction(tx) {
   appState.recentTransactions.unshift(tx);
   if (appState.recentTransactions.length > 20) appState.recentTransactions.pop();
-  localStorage.setItem("toki_recent_txs", JSON.stringify(appState.recentTransactions));
+  localStorage.setItem("gitproof_recent_txs", JSON.stringify(appState.recentTransactions));
 }
 
 // =========================================================================
@@ -867,9 +867,9 @@ export function setupSettingsModal() {
       appState.selectedNetwork = newNet;
       appState.customRpcUrl = newCustomRpc;
 
-      localStorage.setItem("toki_contract_addr", newAddr);
-      localStorage.setItem("toki_network", newNet);
-      localStorage.setItem("toki_custom_rpc", newCustomRpc);
+      localStorage.setItem("gitproof_contract_addr", newAddr);
+      localStorage.setItem("gitproof_network", newNet);
+      localStorage.setItem("gitproof_custom_rpc", newCustomRpc);
 
       genlayerClient.setNetwork(newNet, newCustomRpc);
 
