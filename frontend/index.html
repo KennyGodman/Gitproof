@@ -519,6 +519,24 @@
               </div>
             </div>
 
+            <!-- Visible Verification Failure Card -->
+            <div id="error-container" class="mt-6 p-5 border-2 border-red-600 bg-red-50 hidden shadow-[4px_4px_0px_0px_rgba(220,38,38,1)] font-mono">
+              <div class="flex items-center justify-between mb-2">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-red-600 text-white text-xs font-bold uppercase tracking-wider" id="error-status-tag">
+                  <i class="fa-solid fa-triangle-exclamation"></i> VERIFICATION FAILED
+                </span>
+                <span id="error-stage-tag" class="text-xs font-bold text-red-700 uppercase">
+                  RPC WRITE FAILED
+                </span>
+              </div>
+              <div class="text-xs font-bold text-red-950 mt-2" id="error-title">
+                On-Chain Verification Failure
+              </div>
+              <div class="mt-3 p-3 bg-white border border-red-300 text-xs text-red-900 leading-relaxed font-mono break-words" id="error-message-text">
+                Failure details will appear here...
+              </div>
+            </div>
+
           </div>
 
           <!-- Right: Live Verifiable Dev Passport (5 cols) -->

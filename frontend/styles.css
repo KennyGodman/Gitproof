@@ -53,6 +53,18 @@
   color: #ffffff;
 }
 
+.step-item.error {
+  border-color: #dc2626;
+  background-color: #fef2f2;
+  box-shadow: 2px 2px 0px 0px rgba(220, 38, 38, 1);
+}
+
+.step-item.error .step-badge {
+  background-color: #dc2626;
+  border-color: #dc2626;
+  color: #ffffff;
+}
+
 /* Oracle Node Box States */
 .node-box.leader {
   border-color: #000000;
@@ -67,6 +79,16 @@
 
 .node-box.voted-yes .node-vote {
   color: #000000;
+  font-weight: 800;
+}
+
+.node-box.error {
+  border-color: #dc2626;
+  background-color: #fef2f2;
+}
+
+.node-box.error .node-vote {
+  color: #dc2626;
   font-weight: 800;
 }
 

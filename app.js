@@ -125,6 +125,7 @@ class GenLayerProvider {
   // Contract Read (View Call)
   async readContract({ address, functionName, args = [] }) {
     console.log(`[GenLayer Read] Calling view method '${functionName}' on ${address} with args:`, args);
+    let lastError = null;
     
     // Method 1: GenLayer native gen_call (read mode)
     try {
@@ -142,6 +143,7 @@ class GenLayerProvider {
       }
     } catch (e) {
       console.log("[GenLayer Read] gen_call attempt failed, trying eth_call fallback...", e.message);
+      lastError = e;
     }
 
     // Method 2: Standard eth_call fallback
@@ -151,13 +153,14 @@ class GenLayerProvider {
         data: JSON.stringify({ function_name: functionName, args: args })
       }, "latest"]);
       
-      if (ethCallResult) return ethCallResult;
+      if (ethCallResult !== undefined && ethCallResult !== null) return ethCallResult;
     } catch (e2) {
       console.log("[GenLayer Read] eth_call attempt failed:", e2.message);
+      lastError = e2;
     }
 
-    // Return default response if claim not found
-    return "Claim not found";
+    // Propagate error if both RPC calls failed; do not synthesize a fallback
+    throw new Error(`RPC read call failed for '${functionName}' on ${address}: ${lastError ? lastError.message : "No response from node."}`);
   }
 
   // Contract Write (Transaction)
@@ -181,12 +184,17 @@ class GenLayerProvider {
           method: "eth_sendTransaction",
           params: [txParams]
         });
-        return txHash;
+        if (txHash && typeof txHash === "string" && txHash.startsWith("0x")) {
+          return txHash;
+        }
+        throw new Error("MetaMask did not return a valid transaction hash.");
       } catch (mmErr) {
         console.warn("[MetaMask] eth_sendTransaction failed:", mmErr);
         throw mmErr;
       }
     }
+
+    let lastError = null;
 
     // Using GenLayer RPC directly
     try {
@@ -211,6 +219,7 @@ class GenLayerProvider {
       }
     } catch (rpcErr) {
       console.warn("[GenLayer RPC] gen_call write attempt failed:", rpcErr);
+      lastError = rpcErr;
     }
 
     // Direct eth_sendTransaction on RPC node
@@ -220,17 +229,20 @@ class GenLayerProvider {
         to: address,
         data: JSON.stringify({ function_name: functionName, args: args })
       }]);
-      if (ethSendResult) return ethSendResult;
+      if (ethSendResult && typeof ethSendResult === "string" && ethSendResult.startsWith("0x")) {
+        return ethSendResult;
+      } else if (ethSendResult && ethSendResult.transaction_hash) {
+        return ethSendResult.transaction_hash;
+      } else if (ethSendResult && ethSendResult.hash) {
+        return ethSendResult.hash;
+      }
     } catch (ethSendErr) {
       console.warn("[GenLayer RPC] eth_sendTransaction attempt failed:", ethSendErr);
+      lastError = ethSendErr;
     }
 
-    // Construct valid deterministic transaction hash for tracking
-    const hashBuffer = new TextEncoder().encode(`${address}-${functionName}-${JSON.stringify(args)}-${Date.now()}-${sender}`);
-    const hashHex = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", hashBuffer)))
-      .map(b => b.toString(16).padStart(2, "0"))
-      .join("");
-    return `0x${hashHex}`;
+    // Fail immediately if RPC write fails; do NOT generate synthetic SHA-256 hash
+    throw new Error(`RPC write failed: Unable to submit transaction '${functionName}' to contract ${address}. ${lastError ? lastError.message : "RPC returned no transaction hash."}`);
   }
 
   // Wait for Transaction Receipt & Finality
@@ -246,30 +258,32 @@ class GenLayerProvider {
 
       try {
         const receipt = await this.sendRpcRequest("eth_getTransactionReceipt", [hash]);
-        if (receipt && (receipt.status === "0x1" || receipt.status === 1 || receipt.status === "FINALIZED" || receipt.status === "ACCEPTED")) {
-          return {
-            status: "FINALIZED",
-            transactionHash: hash,
-            blockNumber: receipt.blockNumber || 10420 + i,
-            gasUsed: receipt.gasUsed || "0x5208",
-            raw: receipt
-          };
+        if (receipt) {
+          if (receipt.status === "0x1" || receipt.status === 1 || receipt.status === "FINALIZED" || receipt.status === "ACCEPTED" || receipt.status === "CONFIRMED") {
+            return {
+              status: "FINALIZED",
+              transactionHash: hash,
+              blockNumber: receipt.blockNumber || null,
+              gasUsed: receipt.gasUsed || null,
+              raw: receipt
+            };
+          }
+          if (receipt.status === "0x0" || receipt.status === 0 || receipt.status === "REVERTED" || receipt.status === "FAILED") {
+            throw new Error(`Transaction reverted or failed on-chain with status: ${receipt.status}`);
+          }
         }
       } catch (e) {
-        // Continue polling
+        if (e.message && e.message.includes("Transaction reverted or failed")) {
+          throw e;
+        }
+        // Continue polling if receipt is not available yet
       }
 
       await sleep(pollIntervalMs);
     }
 
-    // Finalized consensus confirmation
-    return {
-      status: "FINALIZED",
-      transactionHash: hash,
-      blockNumber: 10452,
-      gasUsed: "21000",
-      consensusConfirmed: true
-    };
+    // Fail immediately on timeout; do NOT return synthetic finalized confirmation
+    throw new Error(`Transaction finality timeout: Receipt for ${hash} was not confirmed after ${maxPolls} polling cycles.`);
   }
 
   async getBalance(address) {
@@ -283,7 +297,7 @@ class GenLayerProvider {
     } catch (e) {
       console.warn("Could not fetch balance:", e.message);
     }
-    return "10.00"; // Default sandbox balance
+    return "0.00";
   }
 }
 
@@ -472,7 +486,10 @@ export async function executeContractVerification() {
 
     console.log(`[GenLayer Execution] Submitting transaction: ${functionName}(${args.join(', ')}) to contract ${contractAddr}`);
 
+    let activeStep = 1;
+
     // STEP 1: Leader Node Non-deterministic Execution (gl.nondet)
+    activeStep = 1;
     setStepStatus(1, "active");
     updateConsensusBadge("LEADER EXECUTION");
     setNodeVote(0, "WEB RENDER...", "leader");
@@ -489,11 +506,13 @@ export async function executeContractVerification() {
     setStepStatus(1, "done");
 
     // STEP 2: AI Equivalence Consensus
+    activeStep = 2;
     setStepStatus(2, "active");
     updateConsensusBadge("AI EVALUATION");
     setNodeVote(0, "PROPOSING PROOF", "leader");
 
     // STEP 3: Multi-Node Quorum Consensus
+    activeStep = 3;
     setStepStatus(3, "active");
     updateConsensusBadge("QUORUM VOTING");
 
@@ -518,6 +537,7 @@ export async function executeContractVerification() {
     setStepStatus(3, "done");
 
     // STEP 4: On-Chain State Read (Verify Inscription via get_claim)
+    activeStep = 4;
     setStepStatus(4, "active");
     updateConsensusBadge("READING STATE");
 
@@ -529,53 +549,49 @@ export async function executeContractVerification() {
     });
 
     console.log(`[GenLayer Read] get_claim returned:`, onChainResultStr);
-    setStepStatus(4, "done");
-    updateConsensusBadge("FINALIZED");
 
     // Parse On-Chain Result JSON
     let parsedResult = null;
     try {
       if (typeof onChainResultStr === "string" && onChainResultStr.trim().startsWith("{")) {
         parsedResult = JSON.parse(onChainResultStr);
+      } else if (typeof onChainResultStr === "object" && onChainResultStr !== null) {
+        parsedResult = onChainResultStr;
       }
     } catch (parseErr) {
       console.warn("Could not JSON-parse contract get_claim string:", parseErr);
     }
 
     if (!parsedResult) {
-      // If contract returned default format
-      const isVerified = !rawUsername.toLowerCase().includes("nonexistent") && !rawUsername.toLowerCase().includes("fake");
-      parsedResult = {
-        verified: isVerified,
-        status: isVerified ? "VERIFIED" : "REJECTED",
-        detected: appState.currentClaimType === "contrib_count" ? (parseInt(args[1], 10) + 120) : null,
-        commits_found: appState.currentClaimType === "repo_contrib" ? isVerified : null,
-        reason: isVerified 
-          ? `GenVM Consensus Verified: Public GitHub evidence confirmed on-chain for @${rawUsername}.`
-          : `GenVM Consensus Rejection: No verifiable evidence found for @${rawUsername} on public GitHub.`
-      };
+      setStepStatus(4, "error");
+      updateConsensusBadge("UNCONFIRMED CLAIM");
+      throw new Error(`On-chain state read failed: Contract returned unconfirmed result: "${onChainResultStr}". No confirmed credential inscribed.`);
     }
 
-    // Render Real Verified Card
+    setStepStatus(4, "done");
+    const isVerified = Boolean(parsedResult.verified);
+    updateConsensusBadge(isVerified ? "FINALIZED" : "CLAIM REJECTED");
+
+    // Render Real Verified Card strictly from confirmed contract result
     renderResultCard({
-      verified: Boolean(parsedResult.verified),
+      verified: isVerified,
       target: targetDesc,
       reasoning: parsedResult.reason || parsedResult.reasoning || `On-chain claim: ${JSON.stringify(parsedResult)}`,
-      confidenceScore: 0.98,
+      confidenceScore: parsedResult.confidence_score || (isVerified ? 0.98 : null),
       claimId: claimId
     }, txHash);
 
-    // Record Transaction
+    // Record Transaction only when receipt was confirmed on-chain
     recordTransaction({
       txHash: txHash,
       functionName: functionName,
       args: args,
       timestamp: new Date().toISOString(),
-      status: "FINALIZED",
+      status: isVerified ? "FINALIZED" : "FINALIZED (REJECTED)",
       username: rawUsername
     });
 
-    // Refresh Passport UI
+    // Refresh Passport UI strictly from confirmed contract claims
     await loadAndDisplayPassport(rawUsername);
 
     // Refresh Wallet Balance
@@ -583,8 +599,22 @@ export async function executeContractVerification() {
 
   } catch (err) {
     console.error("[GenLayer Verification Error]:", err);
-    alert(`GenLayer Contract Call Failed:\n${err.message || err}`);
-    updateConsensusBadge("ERROR");
+    let stage = "RPC WRITE FAILED";
+    if (activeStep === 2 || activeStep === 3) stage = "CONSENSUS RECEIPT TIMEOUT";
+    else if (activeStep === 4) stage = "CLAIM READ FAILED";
+
+    setStepStatus(activeStep, "error");
+    updateConsensusBadge(stage);
+    setNodeVote(0, "FAILED", "error");
+    for (let n = 1; n <= 4; n++) {
+      if (activeStep <= 3) setNodeVote(n, "ABORTED", "voted-no");
+    }
+
+    showErrorCard({
+      stage: stage,
+      title: `Step ${activeStep} Failed During On-Chain Verification`,
+      message: err.message || String(err)
+    });
   } finally {
     appState.isVerifying = false;
     submitBtn.disabled = false;
@@ -604,8 +634,8 @@ export async function queryContractClaim(claimId) {
     });
     return res;
   } catch (err) {
-    console.warn(`Query claim ${claimId} failed:`, err);
-    return "Claim not found";
+    console.warn(`Query claim ${claimId} failed:`, err.message || err);
+    return null;
   }
 }
 
@@ -687,23 +717,36 @@ export async function loadAndDisplayPassport(username) {
   appState.currentPassportUsername = username;
   const profile = await fetchGitHubProfileData(username);
 
-  // Check on-chain claim for this user
+  // Check on-chain claim strictly from confirmed contract result
   const contribClaimId = `${username}_contrib_500`;
   const onChainClaim = await queryContractClaim(contribClaimId);
-  const hasProof = onChainClaim && onChainClaim !== "Claim not found";
+  let hasOnChainProof = false;
+  let parsedClaim = null;
+
+  if (onChainClaim && onChainClaim !== "Claim not found") {
+    try {
+      parsedClaim = typeof onChainClaim === "string" ? JSON.parse(onChainClaim) : onChainClaim;
+      if (parsedClaim && parsedClaim.verified === true) {
+        hasOnChainProof = true;
+      }
+    } catch (e) {
+      console.warn("Could not parse onChainClaim JSON:", e);
+    }
+  }
+
+  const contractDisplay = appState.contractAddress ? `${appState.contractAddress.slice(0, 6)}...${appState.contractAddress.slice(-4)}` : "Contract";
 
   updatePassportUI(username, {
     avatar: profile.avatar_url,
-    trustScore: hasProof ? 99 : 82,
-    verifiedCount: hasProof ? 2 : 1,
+    trustScore: hasOnChainProof ? 99 : 0,
+    verifiedCount: hasOnChainProof ? 1 : 0,
     annualContribs: profile.annualContribs,
     badges: hasOnChainProof ? [
       "500+ Annual Contributor (GenLayer Verified)",
-      "Contract Proof Inscribed: 0x71cA...89A3",
+      `Contract Proof Inscribed: ${contractDisplay}`,
       "Equivalence Consensus Validated"
     ] : [
-      "GitHub Identity Connected",
-      "Ready for GenLayer Inscription"
+      "No Confirmed GenLayer Credentials"
     ]
   });
 }
@@ -721,6 +764,8 @@ function setStepStatus(stepNum, status) {
     badge.innerHTML = `<i class="fa-solid fa-check text-white"></i>`;
   } else if (status === "active") {
     badge.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-white"></i>`;
+  } else if (status === "error") {
+    badge.innerHTML = `<i class="fa-solid fa-xmark text-white"></i>`;
   } else {
     badge.textContent = stepNum;
   }
@@ -735,6 +780,8 @@ function resetPipelineVisuals() {
   }
   const resultCard = document.getElementById("result-container");
   if (resultCard) resultCard.classList.add("hidden");
+  const errCard = document.getElementById("error-container");
+  if (errCard) errCard.classList.add("hidden");
 }
 
 function setNodeVote(nodeIndex, text, extraClass = "") {
@@ -751,20 +798,46 @@ function updateConsensusBadge(text) {
   if (badge) badge.textContent = text;
 }
 
+function showErrorCard({ stage, title, message }) {
+  const resultCard = document.getElementById("result-container");
+  if (resultCard) resultCard.classList.add("hidden");
+
+  const errContainer = document.getElementById("error-container");
+  const stageTag = document.getElementById("error-stage-tag");
+  const titleEl = document.getElementById("error-title");
+  const msgEl = document.getElementById("error-message-text");
+
+  if (errContainer) {
+    if (stageTag) stageTag.textContent = stage || "VERIFICATION FAILED";
+    if (titleEl) titleEl.textContent = title || "On-Chain Verification Failure";
+    if (msgEl) msgEl.textContent = message || "An error occurred during verification.";
+    errContainer.classList.remove("hidden");
+    if (window.Motion && window.Motion.animate) {
+      window.Motion.animate(errContainer, { opacity: [0, 1], scale: [0.98, 1] }, { duration: 0.3 });
+    }
+  }
+}
+
 function renderResultCard(res, txHash) {
   const card = document.getElementById("result-container");
   const tag = document.getElementById("result-status-tag");
   const txEl = document.getElementById("result-tx-hash");
   const metaEl = document.getElementById("result-meta-text");
   const reasoningEl = document.getElementById("result-reasoning-text");
+  const errCard = document.getElementById("error-container");
 
+  if (errCard) errCard.classList.add("hidden");
   if (!card) return;
   card.classList.remove("hidden");
   
   if (tag) {
-    tag.innerHTML = res.verified 
-      ? `<i class="fa-solid fa-circle-check"></i> VERIFIED ON-CHAIN (GENLAYER)`
-      : `<i class="fa-solid fa-circle-xmark"></i> CLAIM REJECTED`;
+    if (res.verified) {
+      tag.className = "status-tag inline-flex items-center gap-1.5 px-3 py-1 bg-black text-white text-xs font-bold uppercase tracking-wider";
+      tag.innerHTML = `<i class="fa-solid fa-circle-check"></i> VERIFIED ON-CHAIN (GENLAYER)`;
+    } else {
+      tag.className = "status-tag inline-flex items-center gap-1.5 px-3 py-1 bg-neutral-800 text-white text-xs font-bold uppercase tracking-wider";
+      tag.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> CLAIM REJECTED ON-CHAIN`;
+    }
   }
 
   if (txEl) {
@@ -906,7 +979,14 @@ export async function openGitHubProfileModal(username) {
 
   const profile = await fetchGitHubProfileData(username);
   const onChainClaim = await queryContractClaim(`${username}_contrib_500`);
-  const hasProof = onChainClaim && onChainClaim !== "Claim not found";
+  let hasProof = false;
+  let parsedClaim = null;
+  if (onChainClaim && onChainClaim !== "Claim not found") {
+    try {
+      parsedClaim = typeof onChainClaim === "string" ? JSON.parse(onChainClaim) : onChainClaim;
+      hasProof = Boolean(parsedClaim && parsedClaim.verified === true);
+    } catch (e) {}
+  }
 
   container.innerHTML = `
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b-2 border-black pb-6 mb-6">
@@ -936,11 +1016,11 @@ export async function openGitHubProfileModal(username) {
           <i class="fa-solid fa-scale-balanced"></i> GenLayer Contract State (get_claim):
         </span>
         <span class="px-2 py-0.5 ${hasProof ? 'bg-black text-white font-bold' : 'bg-neutral-200 text-neutral-700'} text-[10px]">
-          ${hasProof ? 'ON-CHAIN INSCRIBED' : 'UNVERIFIED / NOT INSCRIBED'}
+          ${hasProof ? 'ON-CHAIN CONFIRMED' : 'UNVERIFIED / NO CONFIRMED PROOF'}
         </span>
       </div>
       <div class="text-[11px] text-neutral-600 truncate">
-        ${hasProof ? `Claim Data: ${onChainClaim}` : `No registered claim found for ${username}_contrib_500.`}
+        ${hasProof ? `Confirmed Claim: ${JSON.stringify(parsedClaim)}` : (onChainClaim ? `Unconfirmed Claim Data: ${typeof onChainClaim === 'object' ? JSON.stringify(onChainClaim) : onChainClaim}` : `No registered claim found for ${username}_contrib_500.`)}
       </div>
     </div>
 
@@ -1166,7 +1246,13 @@ function setupPassportSearch() {
     btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
     const profile = await fetchGitHubProfileData(query);
     const onChainClaim = await queryContractClaim(`${query}_contrib_500`);
-    const hasProof = onChainClaim && onChainClaim !== "Claim not found";
+    let hasProof = false;
+    if (onChainClaim && onChainClaim !== "Claim not found") {
+      try {
+        const parsed = typeof onChainClaim === "string" ? JSON.parse(onChainClaim) : onChainClaim;
+        hasProof = Boolean(parsed && parsed.verified === true);
+      } catch (e) {}
+    }
     btn.innerHTML = `<i class="fa-solid fa-magnifying-glass"></i> LOOKUP`;
 
     resultContainer.innerHTML = `
@@ -1180,7 +1266,7 @@ function setupPassportSearch() {
             </div>
           </div>
           <div class="px-3 py-1 ${hasProof ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700 border border-black'} text-xs font-bold">
-            ${hasProof ? '✓ GENLAYER VERIFIED' : 'NOT INSCRIBED'}
+            ${hasProof ? '✓ GENLAYER CONFIRMED' : 'UNVERIFIED / NOT INSCRIBED'}
           </div>
         </div>
 
@@ -1213,19 +1299,34 @@ function setupPassportSearch() {
 function setupCopyProof() {
   const btn = document.getElementById("btn-copy-proof");
   if (btn) {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
+      const username = appState.currentPassportUsername;
+      const onChainClaim = await queryContractClaim(`${username}_contrib_500`);
+      let parsed = null;
+      try {
+        if (onChainClaim && onChainClaim !== "Claim not found") {
+          parsed = typeof onChainClaim === "string" ? JSON.parse(onChainClaim) : onChainClaim;
+        }
+      } catch (e) {}
+
+      if (!parsed || parsed.verified !== true) {
+        alert(`No confirmed on-chain credential found for @${username}. Credentials are only exportable from confirmed contract results.`);
+        return;
+      }
+
       const proofJSON = {
         "@context": "https://schema.genlayer.com/v1",
         "type": "GenLayerGitHubReputationProof",
         "contract": appState.contractAddress,
         "network": appState.selectedNetwork,
-        "recipient": appState.currentPassportUsername,
+        "recipient": username,
         "method": "verify_contribution_count",
         "consensus": "gl.eq_principle.prompt_non_comparative",
+        "contract_result": parsed,
         "inscribed_timestamp": new Date().toISOString()
       };
       navigator.clipboard.writeText(JSON.stringify(proofJSON, null, 2)).then(() => {
-        btn.textContent = "Copied Proof!";
+        btn.textContent = "Copied Confirmed Proof!";
         setTimeout(() => { btn.textContent = "Copy Proof JSON"; }, 2000);
       });
     });
