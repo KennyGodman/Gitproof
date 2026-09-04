@@ -1,0 +1,32 @@
+{
+  "name": "gitproof",
+  "version": "1.0.0",
+  "description": "Intelligent Smart Contract for Decentralized GitHub Activity & Contribution Verification using GenLayer and Multi-Judge AI Consensus.",
+  "main": "app.js",
+  "type": "module",
+  "scripts": {
+    "test": "node test/test_genlayer_flow.test.js",
+    "test:contract": "python contracts/test_github_verifier.py",
+    "build:sdk": "npx esbuild node_modules/genlayer-js/dist/index.js --bundle --format=esm --outfile=frontend/genlayer-sdk.bundle.js && node -e \"import('fs').then(fs => fs.copyFileSync('frontend/genlayer-sdk.bundle.js', 'genlayer-sdk.bundle.js'))\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KennyGodman/Gitproof.git"
+  },
+  "keywords": [
+    "genlayer",
+    "intelligent-contracts",
+    "github-verification",
+    "oracles",
+    "web3"
+  ],
+  "author": "KennyGodman",
+  "license": "MIT",
+  "dependencies": {
+    "genlayer-js": "^1.1.8",
+    "viem": "^2.29.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

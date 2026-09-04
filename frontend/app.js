@@ -12,22 +12,31 @@
 // 1. GENLAYER NETWORKS & CONFIGURATION
 // =========================================================================
 
+import {
+  createClient,
+  createAccount,
+  generatePrivateKey,
+  chains
+} from "./genlayer-sdk.bundle.js";
+
 export const GENLAYER_NETWORKS = {
-  "testnet-asimov": {
-    id: "testnet-asimov",
-    name: "GenLayer Asimov Testnet",
-    rpcUrl: "https://studio.genlayer.com/api",
-    chainId: 4224,
-    currency: "GEN",
-    explorer: "https://studio.genlayer.com",
-    faucetUrl: "https://studio.genlayer.com"
-  },
   "studionet": {
     id: "studionet",
     name: "GenLayer Studio Sandbox",
     rpcUrl: "https://studio.genlayer.com/api",
-    chainId: 4224,
+    chainId: 61999,
     currency: "GEN",
+    chain: chains.studionet,
+    explorer: "https://studio.genlayer.com",
+    faucetUrl: "https://studio.genlayer.com"
+  },
+  "testnet-asimov": {
+    id: "testnet-asimov",
+    name: "GenLayer Asimov Testnet",
+    rpcUrl: "https://rpc-asimov.genlayer.com",
+    chainId: 4221,
+    currency: "GEN",
+    chain: chains.testnetAsimov,
     explorer: "https://studio.genlayer.com",
     faucetUrl: "https://studio.genlayer.com"
   },
@@ -35,8 +44,9 @@ export const GENLAYER_NETWORKS = {
     id: "localnet",
     name: "Localhost Simulator (4000)",
     rpcUrl: "http://127.0.0.1:4000/api",
-    chainId: 4224,
+    chainId: 61127,
     currency: "GEN",
+    chain: chains.localnet,
     explorer: "http://127.0.0.1:4000",
     faucetUrl: "http://127.0.0.1:4000"
   },
@@ -44,18 +54,19 @@ export const GENLAYER_NETWORKS = {
     id: "custom",
     name: "Custom RPC Endpoint",
     rpcUrl: "https://studio.genlayer.com/api",
-    chainId: 4224,
+    chainId: 61999,
     currency: "GEN",
+    chain: chains.studionet,
     explorer: "",
     faucetUrl: ""
   }
 };
 
-const DEFAULT_CONTRACT_ADDRESS = "0x71cA56e54F4c5a0fC1642f88aD471e9889A3";
+const DEFAULT_CONTRACT_ADDRESS = "0x87CB2B81Cc74e568803792FB8dd97FD17ECAFF5a";
 
 // State Management
 export const appState = {
-  selectedNetwork: localStorage.getItem("gitproof_network") || "testnet-asimov",
+  selectedNetwork: localStorage.getItem("gitproof_network") || "studionet",
   contractAddress: localStorage.getItem("gitproof_contract_addr") || DEFAULT_CONTRACT_ADDRESS,
   customRpcUrl: localStorage.getItem("gitproof_custom_rpc") || "https://studio.genlayer.com/api",
   walletMode: localStorage.getItem("gitproof_wallet_mode") || "embedded", // 'metamask' | 'embedded'
@@ -69,233 +80,140 @@ export const appState = {
 };
 
 // =========================================================================
-// 2. NATIVE GENLAYER JSON-RPC & SDK CLIENT ENGINE
+// 2. OFFICIAL GENLAYER JS SDK CLIENT ENGINE
 // =========================================================================
 
 class GenLayerProvider {
-  constructor(networkKey = "testnet-asimov") {
+  constructor(networkKey = "studionet") {
     this.networkKey = networkKey;
-    this.loadConfig();
+    this.initSdkClient();
   }
 
-  loadConfig() {
-    this.config = GENLAYER_NETWORKS[this.networkKey] || GENLAYER_NETWORKS["testnet-asimov"];
-    this.rpcUrl = this.networkKey === "custom" ? appState.customRpcUrl : this.config.rpcUrl;
+  getChainConfig() {
+    const net = GENLAYER_NETWORKS[this.networkKey] || GENLAYER_NETWORKS["studionet"];
+    return net.chain || chains.studionet;
   }
 
   setNetwork(networkKey, customRpc = null) {
     this.networkKey = networkKey;
-    if (customRpc) this.rpcUrl = customRpc;
-    this.loadConfig();
-  }
-
-  async sendRpcRequest(method, params = []) {
-    const payload = {
-      jsonrpc: "2.0",
-      id: Date.now() + Math.floor(Math.random() * 1000),
-      method: method,
-      params: params
-    };
-
-    try {
-      const response = await fetch(this.rpcUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        throw new Error(`RPC HTTP Error: ${response.status} ${response.statusText}`);
-      }
-
-      const json = await response.json();
-      if (json.error) {
-        throw new Error(json.error.message || JSON.stringify(json.error));
-      }
-      return json.result;
-    } catch (err) {
-      console.warn(`[GenLayer RPC] Call failed for ${method}:`, err.message);
-      throw err;
+    if (customRpc) {
+      appState.customRpcUrl = customRpc;
     }
+    this.initSdkClient();
   }
 
-  // Contract Read (View Call)
-  async readContract({ address, functionName, args = [] }) {
-    console.log(`[GenLayer Read] Calling view method '${functionName}' on ${address} with args:`, args);
-    let lastError = null;
-    
-    // Method 1: GenLayer native gen_call (read mode)
+  initSdkClient() {
+    const chain = this.getChainConfig();
+    let account = null;
+
+    if (appState.walletMode === "embedded" && appState.connectedPrivateKey) {
+      try {
+        account = createAccount(appState.connectedPrivateKey);
+        appState.walletAddress = account.address;
+      } catch (err) {
+        console.warn("[GenLayer SDK] Error instantiating embedded account:", err);
+      }
+    } else if (appState.walletMode === "metamask" && window.ethereum && appState.walletAddress) {
+      account = appState.walletAddress;
+    }
+
     try {
-      const result = await this.sendRpcRequest("gen_call", [{
-        to: address,
-        data: {
-          function_name: functionName,
-          args: args
-        },
-        type: "read"
-      }]);
-      
-      if (result !== undefined && result !== null) {
-        return typeof result === "string" ? result : JSON.stringify(result);
+      if (appState.walletMode === "metamask" && window.ethereum) {
+        this.client = createClient({
+          chain,
+          account: account || undefined,
+          transport: {
+            request: ({ method, params }) => window.ethereum.request({ method, params })
+          }
+        });
+      } else {
+        this.client = createClient({
+          chain,
+          account: account || undefined
+        });
       }
     } catch (e) {
-      console.log("[GenLayer Read] gen_call attempt failed, trying eth_call fallback...", e.message);
-      lastError = e;
+      console.warn("[GenLayer SDK] Client init failed:", e.message);
     }
-
-    // Method 2: Standard eth_call fallback
-    try {
-      const ethCallResult = await this.sendRpcRequest("eth_call", [{
-        to: address,
-        data: JSON.stringify({ function_name: functionName, args: args })
-      }, "latest"]);
-      
-      if (ethCallResult !== undefined && ethCallResult !== null) return ethCallResult;
-    } catch (e2) {
-      console.log("[GenLayer Read] eth_call attempt failed:", e2.message);
-      lastError = e2;
-    }
-
-    // Propagate error if both RPC calls failed; do not synthesize a fallback
-    throw new Error(`RPC read call failed for '${functionName}' on ${address}: ${lastError ? lastError.message : "No response from node."}`);
   }
 
-  // Contract Write (Transaction)
-  async writeContract({ address, functionName, args = [], fromAddress = null }) {
-    const sender = fromAddress || appState.walletAddress || "0x0000000000000000000000000000000000000000";
-    console.log(`[GenLayer Write] Submitting '${functionName}' on ${address} from ${sender} with args:`, args);
-
-    // If MetaMask is active, request MetaMask to sign/send
-    if (appState.walletMode === "metamask" && window.ethereum) {
-      try {
-        const txParams = {
-          from: sender,
-          to: address,
-          data: JSON.stringify({
-            function_name: functionName,
-            args: args
-          }),
-          value: "0x0"
-        };
-        const txHash = await window.ethereum.request({
-          method: "eth_sendTransaction",
-          params: [txParams]
-        });
-        if (txHash && typeof txHash === "string" && txHash.startsWith("0x")) {
-          return txHash;
-        }
-        throw new Error("MetaMask did not return a valid transaction hash.");
-      } catch (mmErr) {
-        console.warn("[MetaMask] eth_sendTransaction failed:", mmErr);
-        throw mmErr;
-      }
-    }
-
-    let lastError = null;
-
-    // Using GenLayer RPC directly
-    try {
-      const txPayload = {
-        from: sender,
-        to: address,
-        data: {
-          function_name: functionName,
-          args: args
-        },
-        value: "0x0",
-        type: "write"
-      };
-
-      const result = await this.sendRpcRequest("gen_call", [txPayload]);
-      if (result && typeof result === "string" && result.startsWith("0x")) {
-        return result;
-      } else if (result && result.transaction_hash) {
-        return result.transaction_hash;
-      } else if (result && result.hash) {
-        return result.hash;
-      }
-    } catch (rpcErr) {
-      console.warn("[GenLayer RPC] gen_call write attempt failed:", rpcErr);
-      lastError = rpcErr;
-    }
-
-    // Direct eth_sendTransaction on RPC node
-    try {
-      const ethSendResult = await this.sendRpcRequest("eth_sendTransaction", [{
-        from: sender,
-        to: address,
-        data: JSON.stringify({ function_name: functionName, args: args })
-      }]);
-      if (ethSendResult && typeof ethSendResult === "string" && ethSendResult.startsWith("0x")) {
-        return ethSendResult;
-      } else if (ethSendResult && ethSendResult.transaction_hash) {
-        return ethSendResult.transaction_hash;
-      } else if (ethSendResult && ethSendResult.hash) {
-        return ethSendResult.hash;
-      }
-    } catch (ethSendErr) {
-      console.warn("[GenLayer RPC] eth_sendTransaction attempt failed:", ethSendErr);
-      lastError = ethSendErr;
-    }
-
-    // Fail immediately if RPC write fails; do NOT generate synthetic SHA-256 hash
-    throw new Error(`RPC write failed: Unable to submit transaction '${functionName}' to contract ${address}. ${lastError ? lastError.message : "RPC returned no transaction hash."}`);
+  // Contract Read (View Call) via GenLayer SDK
+  async readContract({ address, functionName, args = [] }) {
+    this.initSdkClient();
+    console.log(`[GenLayer SDK Read] Calling '${functionName}' on ${address} with args:`, args);
+    const result = await this.client.readContract({
+      address,
+      functionName,
+      args
+    });
+    return typeof result === "string" ? result : JSON.stringify(result);
   }
 
-  // Wait for Transaction Receipt & Finality
-  async waitForTransactionReceipt({ hash, onStatusUpdate = null, maxPolls = 20, pollIntervalMs = 1200 }) {
-    console.log(`[GenLayer Receipt] Waiting for finality of tx: ${hash}`);
+  // Contract Write (Transaction) via GenLayer SDK
+  async writeContract({ address, functionName, args = [] }) {
+    this.initSdkClient();
+    console.log(`[GenLayer SDK Write] Executing signed transaction '${functionName}' on ${address} with args:`, args);
 
-    for (let i = 0; i < maxPolls; i++) {
-      if (onStatusUpdate) {
-        if (i === 1) onStatusUpdate("LEADER_PROPOSING", "Leader node evaluating non-deterministic web oracle...");
-        else if (i === 4) onStatusUpdate("VALIDATOR_VOTING", "Validator quorum executing Equivalence Principle consensus...");
-        else if (i === 7) onStatusUpdate("STATE_COMMITTING", "Committing verified claim record to GenLayer on-chain storage...");
-      }
-
-      try {
-        const receipt = await this.sendRpcRequest("eth_getTransactionReceipt", [hash]);
-        if (receipt) {
-          if (receipt.status === "0x1" || receipt.status === 1 || receipt.status === "FINALIZED" || receipt.status === "ACCEPTED" || receipt.status === "CONFIRMED") {
-            return {
-              status: "FINALIZED",
-              transactionHash: hash,
-              blockNumber: receipt.blockNumber || null,
-              gasUsed: receipt.gasUsed || null,
-              raw: receipt
-            };
-          }
-          if (receipt.status === "0x0" || receipt.status === 0 || receipt.status === "REVERTED" || receipt.status === "FAILED") {
-            throw new Error(`Transaction reverted or failed on-chain with status: ${receipt.status}`);
-          }
-        }
-      } catch (e) {
-        if (e.message && e.message.includes("Transaction reverted or failed")) {
-          throw e;
-        }
-        // Continue polling if receipt is not available yet
-      }
-
-      await sleep(pollIntervalMs);
+    if (!this.client.account) {
+      throw new Error("No active signing account configured. Please switch to the embedded account or connect MetaMask.");
     }
 
-    // Fail immediately on timeout; do NOT return synthetic finalized confirmation
-    throw new Error(`Transaction finality timeout: Receipt for ${hash} was not confirmed after ${maxPolls} polling cycles.`);
+    // Official GenLayer SDK writeContract pipeline:
+    // 1. Constructs calldata object and encodes with GenLayer calldata encoder
+    // 2. Cryptographically signs transaction with secp256k1 private key
+    // 3. Submits signed raw transaction via eth_sendRawTransaction
+    // 4. Returns consensus transaction ID
+    const txHash = await this.client.writeContract({
+      address,
+      functionName,
+      args
+    });
+
+    if (!txHash || typeof txHash !== "string" || !txHash.startsWith("0x")) {
+      throw new Error(`SDK did not return a valid transaction hash: ${JSON.stringify(txHash)}`);
+    }
+
+    return txHash;
+  }
+
+  // Wait for Transaction Receipt & Finality via GenLayer SDK
+  async waitForTransactionReceipt({ hash, onStatusUpdate = null, maxPolls = 30, pollIntervalMs = 2500 }) {
+    console.log(`[GenLayer SDK Receipt] Waiting for finality of tx: ${hash}`);
+    this.initSdkClient();
+
+    if (onStatusUpdate) {
+      onStatusUpdate("LEADER_PROPOSING", "Leader node executing Intelligent Contract and web oracle...");
+    }
+
+    const receipt = await this.client.waitForTransactionReceipt({
+      hash,
+      status: "ACCEPTED",
+      retries: maxPolls,
+      interval: pollIntervalMs
+    });
+
+    if (onStatusUpdate) {
+      onStatusUpdate("STATE_COMMITTING", "Validators reached consensus; state committed on GenLayer.");
+    }
+
+    return {
+      status: receipt.status_name || "FINALIZED",
+      transactionHash: hash,
+      resultName: receipt.result_name || null,
+      raw: receipt
+    };
   }
 
   async getBalance(address) {
     if (!address) return "0.00";
     try {
-      const balanceHex = await this.sendRpcRequest("eth_getBalance", [address, "latest"]);
-      if (balanceHex) {
-        const wei = BigInt(balanceHex);
+      this.initSdkClient();
+      const wei = await this.client.getBalance({ address });
+      if (wei !== undefined && wei !== null) {
         return (Number(wei) / 1e18).toFixed(4);
       }
     } catch (e) {
-      console.warn("Could not fetch balance:", e.message);
+      console.warn("Could not fetch balance via SDK:", e.message);
     }
     return "0.00";
   }
@@ -305,42 +223,36 @@ class GenLayerProvider {
 export const genlayerClient = new GenLayerProvider(appState.selectedNetwork);
 
 // =========================================================================
-// 3. WALLET & ACCOUNT MANAGEMENT
+// 3. WALLET & ACCOUNT MANAGEMENT (SDK-BACKED SECP256K1 EMBEDDED SIGNER)
 // =========================================================================
 
 export function initWallet() {
-  // Check for saved embedded private key or generate new one
   let savedKey = localStorage.getItem("gitproof_genlayer_pk");
-  if (!savedKey) {
-    savedKey = generateRandomPrivateKey();
+  if (!savedKey || !/^0x[0-9a-fA-F]{64}$/.test(savedKey)) {
+    savedKey = generatePrivateKey();
     localStorage.setItem("gitproof_genlayer_pk", savedKey);
   }
   appState.connectedPrivateKey = savedKey;
 
-  const embeddedAddr = deriveAddressFromKey(savedKey);
+  const account = createAccount(savedKey);
+  const embeddedAddr = account.address;
+
   if (appState.walletMode === "embedded" || !window.ethereum) {
     appState.walletAddress = embeddedAddr;
+    genlayerClient.initSdkClient();
     updateWalletUI();
   } else {
     checkMetaMaskConnection();
   }
 }
 
-function generateRandomPrivateKey() {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return "0x" + Array.from(array).map(b => b.toString(16).padStart(2, "0")).join("");
-}
-
 function deriveAddressFromKey(privateKey) {
-  // Generate deterministic 20-byte address format from key
-  let hash = 0;
-  for (let i = 0; i < privateKey.length; i++) {
-    hash = ((hash << 5) - hash) + privateKey.charCodeAt(i);
-    hash |= 0;
+  try {
+    const account = createAccount(privateKey);
+    return account.address;
+  } catch (e) {
+    return "0x0000000000000000000000000000000000000000";
   }
-  const hexPart = Math.abs(hash).toString(16).padStart(8, "0") + privateKey.slice(2, 34);
-  return "0x" + hexPart.slice(0, 40);
 }
 
 export async function connectMetaMask() {
@@ -356,6 +268,7 @@ export async function connectMetaMask() {
       appState.walletMode = "metamask";
       appState.walletAddress = accounts[0];
       localStorage.setItem("gitproof_wallet_mode", "metamask");
+      genlayerClient.initSdkClient();
       await refreshWalletBalance();
       updateWalletUI();
       closeModal("wallet-modal");
@@ -369,7 +282,9 @@ export async function connectMetaMask() {
 export function switchToEmbeddedAccount() {
   appState.walletMode = "embedded";
   localStorage.setItem("gitproof_wallet_mode", "embedded");
-  appState.walletAddress = deriveAddressFromKey(appState.connectedPrivateKey);
+  const account = createAccount(appState.connectedPrivateKey);
+  appState.walletAddress = account.address;
+  genlayerClient.initSdkClient();
   refreshWalletBalance();
   updateWalletUI();
   closeModal("wallet-modal");
